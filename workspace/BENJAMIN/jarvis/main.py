@@ -21,7 +21,7 @@ from jarvis.utils.logger import get_logger
 logger = get_logger(__name__)
 
 class JarvisAssistant:
-    def __init__(self):
+    def __init__(self, enable_voice: bool = True, enable_terminal: bool = True):
         # Load configuration
         self.cfg = Config()
         logger.info("Loaded configuration.")
@@ -44,9 +44,13 @@ class JarvisAssistant:
         self.rl_agent = ReinforcementAgent(model_path="models/rl_policy_final.zip")
         logger.info("Reinforcement learning agent loaded.")
 
-        # Initialize user interfaces (voice & terminal) on separate threads
-        self.voice_interface = VoiceInterface(callback=self._handle_input)
-        self.terminal_interface = TerminalInterface(callback=self._handle_input)
+        # Initialize user interfaces conditionally
+        self.voice_interface = None
+        if enable_voice:
+            self.voice_interface = VoiceInterface(callback=self._handle_input)
+        self.terminal_interface = None
+        if enable_terminal:
+            self.terminal_interface = TerminalInterface(callback=self._handle_input)
         logger.info("User interfaces initialized.")
 
         self.running = False
@@ -77,6 +81,18 @@ class JarvisAssistant:
             conversation,
         ]
 
+    def process_input(self, raw_text: str, source: str = "chat") -> str:
+        """Process input text and return a response string."""
+        logger.debug("Input received [%s]: %s", source, raw_text)
+        intent, entities = self.intent_recognizer.parse(raw_text)
+        context = self.stm.get_context()
+        intent, entities = self.dialogue_manager.resolve_follow_up(intent, entities, context)
+        entities["text"] = raw_text
+        response = self._dispatch_intent(intent, entities, context)
+        self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
+        self.rl_agent.observe(turn=self.stm.get_recent_turns(), memory=self.ltm)
+        return response
+
     def _handle_input(self, raw_text: str, source: str = "voice"):
         """
         Common handler for both voice and terminal inputs.
@@ -86,19 +102,11 @@ class JarvisAssistant:
         4. Execute skill.handle() → gets a response string.
         5. Append to STM; emit response via TTS and/or print to terminal.
         """
-        logger.debug("Input received [%s]: %s", source, raw_text)
-        intent, entities = self.intent_recognizer.parse(raw_text)
-        context = self.stm.get_context()  # Retrieves recent context
-        intent, entities = self.dialogue_manager.resolve_follow_up(intent, entities, context)
-        entities["text"] = raw_text  # pass raw input to skills
-        response = self._dispatch_intent(intent, entities, context)
-        # Update STM with this turn
-        self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
-        # Possibly trigger proactive RL suggestions or learn from this turn
-        self.rl_agent.observe(turn=self.stm.get_recent_turns(), memory=self.ltm)
-        # Emit response
-        self.voice_interface.speak(response)
-        self.terminal_interface.print(response)
+        response = self.process_input(raw_text, source)
+        if self.voice_interface:
+            self.voice_interface.speak(response)
+        if self.terminal_interface:
+            self.terminal_interface.print(response)
 
     def _dispatch_intent(self, intent: str, params: dict, context: dict) -> str:
         """
@@ -118,12 +126,14 @@ class JarvisAssistant:
         logger.info("Starting Jarvis assistant...")
 
         # Start voice interface listening loop in a separate thread
-        voice_thread = threading.Thread(target=self.voice_interface.listen_loop, daemon=True)
-        voice_thread.start()
+        if self.voice_interface:
+            voice_thread = threading.Thread(target=self.voice_interface.listen_loop, daemon=True)
+            voice_thread.start()
 
         # Start terminal interface listening loop in a separate thread
-        term_thread = threading.Thread(target=self.terminal_interface.listen_loop, daemon=True)
-        term_thread.start()
+        if self.terminal_interface:
+            term_thread = threading.Thread(target=self.terminal_interface.listen_loop, daemon=True)
+            term_thread.start()
 
         # Keep the main thread alive while interfaces run
         try:
@@ -136,8 +146,10 @@ class JarvisAssistant:
     def shutdown(self):
         """Cleanly stop all loops and perform any cleanup."""
         self.running = False
-        self.voice_interface.stop()
-        self.terminal_interface.stop()
+        if self.voice_interface:
+            self.voice_interface.stop()
+        if self.terminal_interface:
+            self.terminal_interface.stop()
         logger.info("Jarvis assistant shut down.")
 
 
