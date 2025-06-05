@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import logging
+import platform
 from jarvis.config import Config
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def handle(intent: str, params: dict, context: dict) -> str:
             # Cross-platform open:
             if os.name == "nt":  # Windows
                 os.startfile(file_path)
-            elif os.uname().sysname == "Darwin":  # macOS
+            elif platform.system() == "Darwin":  # macOS
                 subprocess.run(["open", file_path])
             else:  # Linux and others
                 subprocess.run(["xdg-open", file_path])
