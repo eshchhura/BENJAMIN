@@ -58,7 +58,14 @@ class JarvisAssistant:
             can_handle(intent: str) -> bool
             handle(intent: str, params: dict, context: dict) -> str
         """
-        from jarvis.skills import file_manager, scheduler, coding_helper, smart_home, info_query
+        from jarvis.skills import (
+            file_manager,
+            scheduler,
+            coding_helper,
+            smart_home,
+            info_query,
+            conversation,
+        )
 
         # Example registry: list of skill modules
         return [
@@ -66,7 +73,8 @@ class JarvisAssistant:
             scheduler,
             coding_helper,
             smart_home,
-            info_query
+            info_query,
+            conversation,
         ]
 
     def _handle_input(self, raw_text: str, source: str = "voice"):
@@ -82,6 +90,7 @@ class JarvisAssistant:
         intent, entities = self.intent_recognizer.parse(raw_text)
         context = self.stm.get_context()  # Retrieves recent context
         intent, entities = self.dialogue_manager.resolve_follow_up(intent, entities, context)
+        entities["text"] = raw_text  # pass raw input to skills
         response = self._dispatch_intent(intent, entities, context)
         # Update STM with this turn
         self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
