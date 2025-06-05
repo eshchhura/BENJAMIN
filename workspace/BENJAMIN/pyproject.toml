@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jarvis-assistant"
+name = "BENJAMIN"
 version = "0.1.0"
 description = "Jarvis-style personal assistant supporting voice and terminal interaction"
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
     "vosk>=0.3.45",
     "whisper-client>=0.1.0",
     "pyttsx3>=2.90",
-    "Coqui-TTS>=0.0.17",
+    "Coqui-TTS>=0.17",
     "rasa[full]>=3.0.0",
     "spacy>=3.5.0",
     "apscheduler>=3.9.1",
@@ -29,3 +29,7 @@ dependencies = [
     "pytest>=7.2.0",
     "python-dotenv>=0.21.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-vv"

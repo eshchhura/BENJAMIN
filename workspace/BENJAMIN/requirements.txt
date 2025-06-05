@@ -8,6 +8,7 @@ Coqui-TTS>=0.0.17          # neural TTS (optional)
 rasa[full]>=3.0.0          # NLU + dialogue management
 spacy>=3.5.0               # NLP toolkit for entity extraction
 apscheduler>=3.9.1         # scheduling reminders/alarms
+dateparser>=1.1.0        # parse natural language dates (optional)
 sqlalchemy>=1.4            # ORM layer for SQLite
 faiss-cpu>=1.7.3           # vector embeddings store (or Chroma if preferred)
 stable-baselines3>=2.1.0   # reinforcement learning algorithms
