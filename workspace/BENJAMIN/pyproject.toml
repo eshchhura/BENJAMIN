@@ -15,7 +15,6 @@ dependencies = [
     "whisper-client>=0.1.0",
     "pyttsx3>=2.90",
     "Coqui-TTS>=0.17",
-    "rasa[full]>=3.0.0",
     "spacy>=3.5.0",
     "apscheduler>=3.9.1",
     "sqlalchemy>=1.4",
