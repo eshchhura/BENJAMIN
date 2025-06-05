@@ -8,7 +8,6 @@ import faiss
 import numpy as np
 import os
 import logging
-from jarvis.config import Config
 from sentence_transformers import SentenceTransformer  # e.g. 'all-MiniLM-L6-v2'
 
 logger = logging.getLogger(__name__)
