@@ -12,8 +12,9 @@ This repository contains a modular, “Jarvis-style” personal assistant that s
 **Getting Started:**  
 1. Create a virtual environment (e.g., `python3 -m venv venv && source venv/bin/activate`).  
 2. Install dependencies: `pip install -r requirements.txt`.  
-3. Populate `config/config.yaml` with your API keys, device names, etc.  
-4. Run Jarvis: `bash scripts/run_jarvis.sh` or `python -m jarvis.main`.  
+3. Populate `config/config.yaml` with your API keys, device names, etc.
+4. To try a simple chat window run: `python -m jarvis` or `python -m jarvis.chat_app`.
+   Voice/terminal mode is still available via `bash scripts/run_jarvis.sh`.
 
 **Modules Breakdown:**  
 - `interfaces/`         : Voice & terminal I/O, wake-word listening.  
