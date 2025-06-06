@@ -1,0 +1,18 @@
+Collecting rasa[full]
+  Using cached rasa-1.10.2-py3-none-any.whl.metadata (14 kB)
+Collecting PyJWT<1.8,>=1.7 (from rasa[full])
+  Using cached PyJWT-1.7.1-py2.py3-none-any.whl.metadata (3.9 kB)
+Collecting SQLAlchemy<1.4.0,>=1.3.3 (from rasa[full])
+  Using cached SQLAlchemy-1.3.24.tar.gz (6.4 MB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting absl-py<0.10,>=0.9 (from rasa[full])
+  Using cached absl-py-0.9.0.tar.gz (104 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'error'
