@@ -26,7 +26,7 @@ def handle(intent: str, params: dict, context: dict) -> str:
     APScheduler jobs fire at the specified datetime to send notifications.
     """
     cfg = Config()
-    db_path = cfg.get("memory", "long_term_db_path")
+    db_path = cfg.get("assistant", "memory", "long_term_db_path")
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute(
