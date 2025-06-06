@@ -27,8 +27,12 @@ class JarvisAssistant:
         logger.info("Loaded configuration.")
 
         # Initialize persistent memory
-        self.ltm = LongTermMemory(self.cfg.get("memory", "long_term_db_path"))
-        self.stm = ShortTermMemory(capacity=self.cfg.get("memory", "short_term_capacity"))
+        self.ltm = LongTermMemory(
+            self.cfg.get("assistant", "memory", "long_term_db_path")
+        )
+        self.stm = ShortTermMemory(
+            capacity=self.cfg.get("assistant", "memory", "short_term_capacity")
+        )
         logger.info("Memory modules initialized.")
 
         # Initialize NLU components
