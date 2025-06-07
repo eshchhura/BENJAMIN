@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
+from tkinter import TclError
 
 
 class ChatInterface:
@@ -13,7 +14,10 @@ class ChatInterface:
             Function that takes a string input and returns a response string.
         """
         self.handle_func = handle_func
-        self.window = tk.Tk()
+        try:
+            self.window = tk.Tk()
+        except TclError as e:  # pragma: no cover - GUI may be unavailable
+            raise RuntimeError("Tkinter GUI unavailable") from e
         self.window.title("Jarvis Chat")
 
         self.chat_log = ScrolledText(self.window, state="disabled", width=80, height=20)

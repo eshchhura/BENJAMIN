@@ -8,16 +8,27 @@
 import logging
 import sqlite3
 from datetime import datetime
-from apscheduler.schedulers.background import BackgroundScheduler
+
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+except Exception as e:  # pragma: no cover - optional dependency
+    BackgroundScheduler = None
+    logging.getLogger(__name__).warning("APScheduler not available: %s", e)
+
 from jarvis.config import Config
 
 logger = logging.getLogger(__name__)
 
-# Initialize a global scheduler (runs in background thread)
-scheduler = BackgroundScheduler()
-scheduler.start()
+# Initialize a global scheduler (runs in background thread) if available
+if BackgroundScheduler is not None:
+    scheduler = BackgroundScheduler()
+    scheduler.start()
+else:  # fall back to dummy scheduler
+    scheduler = None
 
 def can_handle(intent: str) -> bool:
+    if scheduler is None:
+        return False
     return intent in {"create_reminder", "list_reminders", "delete_reminder"}
 
 def handle(intent: str, params: dict, context: dict) -> str:
@@ -25,6 +36,8 @@ def handle(intent: str, params: dict, context: dict) -> str:
     For simplicity, reminders are stored in a local SQLite DB (memory_db.py).
     APScheduler jobs fire at the specified datetime to send notifications.
     """
+    if scheduler is None:
+        return "Scheduling functionality is unavailable."
     cfg = Config()
     db_path = cfg.get("assistant", "memory", "long_term_db_path")
     conn = sqlite3.connect(db_path)

@@ -6,7 +6,14 @@
 
 import logging
 import numpy as np
-from stable_baselines3 import PPO
+
+try:
+    from stable_baselines3 import PPO
+except Exception as e:  # pragma: no cover - optional dependency
+    PPO = None
+    logging.getLogger(__name__).warning(
+        "stable-baselines3 not available: %s", e
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +25,10 @@ class ReinforcementAgent:
     """
 
     def __init__(self, model_path: str):
+        if PPO is None:
+            logger.warning("Reinforcement learning disabled: stable-baselines3 not installed")
+            self.model = None
+            return
         try:
             self.model = PPO.load(model_path)
             logger.info("ReinforcementAgent loaded model from %s.", model_path)
