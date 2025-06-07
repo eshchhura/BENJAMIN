@@ -32,6 +32,12 @@ dependencies = [
     "openai>=1.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "openai",
+    "PyYAML",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-vv"
