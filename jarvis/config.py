@@ -4,8 +4,12 @@
 # -----------------------------
 
 import os
-import yaml
+import logging
 import logging.config
+from typing import Any, Optional
+import yaml
+
+from config.loader import JarvisConfig, load_config
 
 class Config:
     """Singleton configuration loader."""
@@ -17,31 +21,29 @@ class Config:
             cls._instance._load(config_path)
         return cls._instance
 
-    def _load(self, config_path=None):
-        # Default to 'config/config.yaml' at repo root
+    def _load(self, config_path: Optional[str] = None) -> None:
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         default_path = os.path.join(base, "config", "config.yaml")
         path = config_path or default_path
-        with open(path, "r") as f:
-            config_data = yaml.safe_load(f)
-        self._data = config_data
 
-        # Setup logging immediately
-        log_cfg = self._data.get("logging", {})
-        if log_cfg and os.path.exists(log_cfg.get("config_file", "")):
-            logging.config.dictConfig(log_cfg)
+        self._data: JarvisConfig = load_config(path)
+
+        log_cfg = self._data.logging
+        if log_cfg.config_file and os.path.exists(log_cfg.config_file):
+            with open(log_cfg.config_file, "r") as f:
+                logging.config.dictConfig(yaml.safe_load(f))
         else:
-            # Fallback: basicConfig
-            import logging
-            logging.basicConfig(level=logging.INFO)
+            logging.basicConfig(level=getattr(logging, log_cfg.level, logging.INFO))
 
     def get(self, *keys, default=None):
         """
         Retrieve a nested configuration value, e.g. config.get('assistant', 'name').
         """
-        data = self._data
+        data: Any = self._data
         for key in keys:
-            if data and key in data:
+            if hasattr(data, key):
+                data = getattr(data, key)
+            elif isinstance(data, dict) and key in data:
                 data = data[key]
             else:
                 return default

@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 def can_handle(intent: str) -> bool:
     return intent in {"turn_on_light", "turn_off_light", "set_thermostat", "get_sensor_status"}
 
-def handle(intent: str, params: dict, context: dict) -> str:
+def handle(request: dict) -> dict:
+    intent = request.get("intent", "")
+    params = request.get("entities", {})
+    context = request.get("context", {})
     """
     Uses Home Assistant’s REST API to perform actions. Requires host + token from config.
     """
@@ -26,42 +29,42 @@ def handle(intent: str, params: dict, context: dict) -> str:
         if intent in {"turn_on_light", "turn_off_light"}:
             light_name = params.get("device")  # e.g., "living_room_light"
             if not light_name:
-                return "Which light should I control?"
+                return {"text": "Which light should I control?"}
             action = "turn_on" if intent == "turn_on_light" else "turn_off"
             service = f"/api/services/light/{action}"
             data = {"entity_id": f"light.{light_name}"}
             resp = requests.post(f"{ha_host}{service}", json=data, headers=headers)
             if resp.status_code == 200:
-                return f"{action.replace('_', ' ').capitalize()} {light_name}."
+                return {"text": f"{action.replace('_', ' ').capitalize()} {light_name}."}
             else:
-                return f"Failed to {action.replace('_', ' ')} {light_name}."
+                return {"text": f"Failed to {action.replace('_', ' ')} {light_name}."}
         
         elif intent == "set_thermostat":
             temp = params.get("temperature")
             if not temp:
-                return "What temperature should I set the thermostat to?"
+                return {"text": "What temperature should I set the thermostat to?"}
             service = "/api/services/climate/set_temperature"
             # Assuming a default climate entity; modify as needed
             data = {"entity_id": "climate.home_thermostat", "temperature": float(temp)}
             resp = requests.post(f"{ha_host}{service}", json=data, headers=headers)
             if resp.status_code == 200:
-                return f"Thermostat set to {temp}°."
+                return {"text": f"Thermostat set to {temp}°."}
             else:
-                return f"Couldn’t set thermostat to {temp}°."
+                return {"text": f"Couldn’t set thermostat to {temp}°."}
         
         elif intent == "get_sensor_status":
             sensor = params.get("sensor")  # e.g., "front_door"
             if not sensor:
-                return "Which sensor status would you like?"
+                return {"text": "Which sensor status would you like?"}
             resp = requests.get(f"{ha_host}/api/states/sensor.{sensor}", headers=headers)
             if resp.status_code == 200:
                 state = resp.json().get("state")
-                return f"Sensor {sensor} is currently '{state}'."
+                return {"text": f"Sensor {sensor} is currently '{state}'."}
             else:
-                return f"Could not retrieve status for {sensor}."
+                return {"text": f"Could not retrieve status for {sensor}."}
         
         else:
-            return "Smart home helper received an unknown intent."
+            return {"text": "Smart home helper received an unknown intent."}
     except Exception as e:
         logger.exception("Error in smart_home.handle: %s", e)
-        return "Sorry, I couldn’t complete the smart home request."
+        return {"text": "Sorry, I couldn’t complete the smart home request."}

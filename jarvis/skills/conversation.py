@@ -24,11 +24,14 @@ def can_handle(intent: str) -> bool:
     return True
 
 
-def handle(intent: str, params: dict, context: dict) -> str:
+def handle(request: dict) -> dict:
+    intent = request.get("intent", "")
+    params = request.get("entities", {})
+    context = request.get("context", {})
     """Generate a response using OpenAI ChatGPT."""
     prompt = params.get("text", "")
     if not prompt:
-        return "I'm not sure what you want me to talk about."
+        return {"text": "I'm not sure what you want me to talk about."}
     try:
         system_prompt = f"You are {ASSISTANT_NAME}, a helpful assistant."
 
@@ -51,7 +54,7 @@ def handle(intent: str, params: dict, context: dict) -> str:
 
         resp = openai.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
         msg = resp.choices[0].message.content.strip()
-        return msg
+        return {"text": msg}
     except Exception as e:
         logger.exception("ChatGPT request failed: %s", e)
-        return "Sorry, I couldn't think of a reply."
+        return {"text": "Sorry, I couldn't think of a reply."}

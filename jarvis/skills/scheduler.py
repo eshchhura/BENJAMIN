@@ -31,13 +31,16 @@ def can_handle(intent: str) -> bool:
         return False
     return intent in {"create_reminder", "list_reminders", "delete_reminder"}
 
-def handle(intent: str, params: dict, context: dict) -> str:
+def handle(request: dict) -> dict:
+    intent = request.get("intent", "")
+    params = request.get("entities", {})
+    context = request.get("context", {})
     """
     For simplicity, reminders are stored in a local SQLite DB (memory_db.py).
     APScheduler jobs fire at the specified datetime to send notifications.
     """
     if scheduler is None:
-        return "Scheduling functionality is unavailable."
+        return {"text": "Scheduling functionality is unavailable."}
     cfg = Config()
     db_path = cfg.get("assistant", "memory", "long_term_db_path")
     conn = sqlite3.connect(db_path)
@@ -52,7 +55,7 @@ def handle(intent: str, params: dict, context: dict) -> str:
             msg = params.get("message")
             run_at_str = params.get("datetime")  # e.g., "2025-06-10 15:00"
             if not msg or not run_at_str:
-                return "I need both a reminder message and a date/time."
+                return {"text": "I need both a reminder message and a date/time."}
             run_at = datetime.fromisoformat(run_at_str)
             c.execute("INSERT INTO reminders (message, run_at) VALUES (?, ?)", (msg, run_at_str))
             reminder_id = c.lastrowid
@@ -65,20 +68,20 @@ def handle(intent: str, params: dict, context: dict) -> str:
                 args=[reminder_id, msg],
                 id=f"reminder_{reminder_id}"
             )
-            return f"Reminder #{reminder_id} set for {run_at.strftime('%Y-%m-%d %H:%M')}."
+            return {"text": f"Reminder #{reminder_id} set for {run_at.strftime('%Y-%m-%d %H:%M')}."}
         
         elif intent == "list_reminders":
             c.execute("SELECT id, message, run_at FROM reminders ORDER BY run_at")
             rows = c.fetchall()
             if not rows:
-                return "You have no upcoming reminders."
+                return {"text": "You have no upcoming reminders."}
             lines = [f"#{r[0]}: '{r[1]}' at {r[2]}" for r in rows]
-            return "Your reminders:\n" + "\n".join(lines)
+            return {"text": "Your reminders:\n" + "\n".join(lines)}
 
         elif intent == "delete_reminder":
             rem_id = params.get("id")
             if not rem_id:
-                return "I need the reminder ID you want to delete."
+                return {"text": "I need the reminder ID you want to delete."}
             c.execute("DELETE FROM reminders WHERE id = ?", (rem_id,))
             conn.commit()
             # Also remove from scheduler if exists
@@ -87,13 +90,13 @@ def handle(intent: str, params: dict, context: dict) -> str:
                 scheduler.remove_job(job_id)
             except Exception:
                 pass
-            return f"Deleted reminder #{rem_id}."
+            return {"text": f"Deleted reminder #{rem_id}."}
         
         else:
-            return "Scheduler received an unknown intent."
+            return {"text": "Scheduler received an unknown intent."}
     except Exception as e:
         logger.exception("Error in scheduler.handle: %s", e)
-        return "An error occurred while handling scheduling."
+        return {"text": "An error occurred while handling scheduling."}
     finally:
         conn.close()
 

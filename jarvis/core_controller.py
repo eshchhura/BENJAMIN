@@ -71,6 +71,9 @@ class CoreController:
 
         for skill in self.skill_registry:
             if skill.can_handle(intent):
-                return skill.handle(intent, params, ctx)
+                result = skill.handle({"intent": intent, "entities": params, "context": ctx})
+                if isinstance(result, dict):
+                    return result.get("text", "")
+                return str(result)
         logger.warning("No skill found to handle intent '%s'", intent)
         return "Sorry, I didn’t understand that. Can you rephrase?"

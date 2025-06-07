@@ -11,8 +11,8 @@ def test_conversation_handles_any_intent(monkeypatch):
         return Resp()
 
     monkeypatch.setattr(conversation.openai.chat.completions, "create", fake_create)
-    response = conversation.handle("unknown", {"text": "Hello"}, {})
-    assert "Hi there" in response
+    response = conversation.handle({"intent": "unknown", "entities": {"text": "Hello"}, "context": {}})
+    assert "Hi there" in response["text"]
 
 
 def test_conversation_includes_history(monkeypatch):
@@ -37,7 +37,7 @@ def test_conversation_includes_history(monkeypatch):
         {"input": "how are you?", "response": "fine"},
     ]
 
-    conversation.handle("unknown", {"text": "tell me a joke"}, {"recent_turns": history})
+    conversation.handle({"intent": "unknown", "entities": {"text": "tell me a joke"}, "context": {"recent_turns": history}})
 
     msgs = captured['messages']
     expected = [
