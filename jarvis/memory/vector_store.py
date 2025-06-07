@@ -4,49 +4,92 @@
 # Enables semantic retrieval of related past context.
 # -----------------------------------
 
-import faiss
-import numpy as np
 import os
 import logging
-from sentence_transformers import SentenceTransformer  # e.g. 'all-MiniLM-L6-v2'
+from typing import List, Optional
+
+try:
+    import faiss  # type: ignore
+except Exception:  # pragma: no cover - optional dependency may be missing
+    faiss = None
+
+import numpy as np
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except Exception:  # pragma: no cover - provide dummy model if missing
+    class SentenceTransformer:  # type: ignore
+        def __init__(self, *_, **__):
+            pass
+
+        def get_sentence_embedding_dimension(self) -> int:
+            return 3
+
+        def encode(self, texts):
+            return np.array([[0.0, 0.0, 0.0] for _ in texts], dtype=np.float32)
+
+from .cache import LRUCache
 
 logger = logging.getLogger(__name__)
 
 class VectorStore:
-    """
-    - On each new turn, compute embedding and add to FAISS index.
-    - To retrieve relevant context, embed a query and search nearest neighbors.
-    """
+    """Simple sentence embedding store with optional FAISS backend."""
 
-    def __init__(self, index_path: str):
+    def __init__(self, index_path: str, cache_size: int = 128):
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
         self.index_path = index_path
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
         self.dim = self.model.get_sentence_embedding_dimension()
-        if os.path.exists(index_path):
-            self.index = faiss.read_index(index_path)
+        self.texts: List[str] = []
+        self.cache = LRUCache(maxsize=cache_size)
+
+        if faiss is not None:
+            if os.path.exists(index_path):
+                self.index = faiss.read_index(index_path)
+            else:
+                self.index = faiss.IndexFlatL2(self.dim)
         else:
-            self.index = faiss.IndexFlatL2(self.dim)
-            # Metadata store to map index IDs → (turn_id, timestamp) as needed
-            self.metadata = []
+            self.index = None
+            self.vectors = np.empty((0, self.dim), dtype=np.float32)
+
         logger.info("VectorStore initialized with index path %s.", index_path)
 
-    def add_turn(self, turn_text: str):
-        """
-        Compute embedding for turn_text and add to FAISS index.
-        """
-        vector = self.model.encode([turn_text])
-        self.index.add(np.array(vector).astype(np.float32))
-        # Append metadata (e.g., timestamp or turn ID) here if needed.
-        self._save_index()
+    def store(self, text: str) -> None:
+        """Compute embedding for ``text`` and add to the store."""
+        vector = self.model.encode([text])[0].astype(np.float32)
 
-    def query_similar(self, query: str, top_k: int = 3):
-        """
-        Return the indices of the top_k most similar past turns for a given query.
-        """
-        vector = self.model.encode([query])
-        distances, indices = self.index.search(np.array(vector).astype(np.float32), top_k)
-        return indices[0], distances[0]
+        if self.index is not None:
+            self.index.add(np.array([vector]))
+            self._save_index()
+        else:
+            self.vectors = np.vstack([self.vectors, vector])
 
-    def _save_index(self):
-        faiss.write_index(self.index, self.index_path)
+        self.texts.append(text)
+
+    def retrieve(self, query: str, top_k: int = 3) -> List[str]:
+        """Return up to ``top_k`` texts most similar to ``query``."""
+        cache_key = (query, top_k)
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        vector = self.model.encode([query])[0].astype(np.float32)
+
+        if self.index is not None:
+            distances, indices = self.index.search(np.array([vector]), top_k)
+            idxs = indices[0].tolist()
+        else:
+            if self.vectors.size == 0:
+                idxs = []
+            else:
+                sims = np.dot(self.vectors, vector)
+                norms = np.linalg.norm(self.vectors, axis=1) * np.linalg.norm(vector)
+                sims = sims / np.clip(norms, 1e-12, None)
+                idxs = (-sims).argsort()[:top_k].tolist()
+
+        results = [self.texts[i] for i in idxs if i < len(self.texts)]
+        self.cache.set(cache_key, results)
+        return results
+
+    def _save_index(self) -> None:
+        if faiss is not None:
+            faiss.write_index(self.index, self.index_path)

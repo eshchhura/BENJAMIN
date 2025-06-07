@@ -15,6 +15,7 @@ from jarvis.nlu.intent_recognizer import IntentRecognizer
 from jarvis.nlu.dialogue_manager import DialogueManager
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemory
+from jarvis.memory.vector_store import VectorStore
 from jarvis.learning.reinforcement import ReinforcementAgent
 from jarvis.utils.logger import get_logger
 
@@ -32,6 +33,9 @@ class JarvisAssistant:
         )
         self.stm = ShortTermMemory(
             capacity=self.cfg.get("assistant", "memory", "short_term_capacity")
+        )
+        self.vector_store = VectorStore(
+            self.cfg.get("assistant", "memory", "vector_store_path")
         )
         logger.info("Memory modules initialized.")
 
@@ -92,8 +96,10 @@ class JarvisAssistant:
         context = self.stm.get_context()
         intent, entities = self.dialogue_manager.resolve_follow_up(intent, entities, context)
         entities["text"] = raw_text
+        context["related_turns"] = self.vector_store.retrieve(raw_text)
         response = self._dispatch_intent(intent, entities, context)
         self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
+        self.vector_store.store(raw_text)
         self.rl_agent.observe(turn=self.stm.get_recent_turns(), memory=self.ltm)
         return response
 
@@ -121,6 +127,8 @@ class JarvisAssistant:
         # Pass recent conversation turns so skills can leverage short term memory
         ctx = dict(context) if context else {}
         ctx["recent_turns"] = self.stm.get_recent_turns()
+        if context and "related_turns" in context:
+            ctx["related_turns"] = context["related_turns"]
 
         for skill in self.skill_registry:
             if skill.can_handle(intent):
