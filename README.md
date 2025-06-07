@@ -17,6 +17,10 @@ This repository contains a modular, “Jarvis-style” personal assistant that s
 4. To try a simple chat window run: `python -m jarvis` or `python -m jarvis.chat_app`.
    Voice/terminal mode is still available via `bash scripts/run_jarvis.sh`.
 5. Train the spaCy based NLU model with `python scripts/train_spacy_nlu.py` (optional).
+6. To use the Rasa NLU engine instead, first train the Rasa model by running
+   `python scripts/train_rasa_nlu.py`. This will place the trained model under
+   `models/rasa_nlu/`. Then edit `config/config.yaml` and set
+   `assistant.nlu_engine: "rasa"`.
 
 **Modules Breakdown:**  
 - `interfaces/`         : Voice & terminal I/O, wake-word listening.
