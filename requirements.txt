@@ -21,3 +21,4 @@ pywemo>=0.6.0              # Belkin WeMo integration
 pytest>=7.2.0              # for running unit tests
 python-dotenv>=0.21.0      # optionally load environment variables
 openai>=1.0.0             # ChatGPT integration for conversation
+rasa>=3.1                 # optional: use Rasa NLU engine
