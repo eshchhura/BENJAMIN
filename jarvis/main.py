@@ -118,9 +118,13 @@ class JarvisAssistant:
         then call its handle() method.
         If no skill can handle it, return a fallback message.
         """
+        # Pass recent conversation turns so skills can leverage short term memory
+        ctx = dict(context) if context else {}
+        ctx["recent_turns"] = self.stm.get_recent_turns()
+
         for skill in self.skill_registry:
             if skill.can_handle(intent):
-                return skill.handle(intent, params, context)
+                return skill.handle(intent, params, ctx)
         logger.warning("No skill found to handle intent '%s'", intent)
         return "Sorry, I didn’t understand that. Can you rephrase?"
 

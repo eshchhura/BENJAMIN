@@ -21,13 +21,25 @@ def handle(intent: str, params: dict, context: dict) -> str:
         return "I'm not sure what you want me to talk about."
     try:
         system_prompt = f"You are {ASSISTANT_NAME}, a helpful assistant."
-        resp = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-        )
+
+        # Build chat history from recent turns if provided
+        history = context.get("recent_turns", []) if context else []
+        # Limit history to the last 5 turns to keep token usage small
+        history = history[-5:]
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for turn in history:
+            user_msg = turn.get("input")
+            if user_msg:
+                messages.append({"role": "user", "content": user_msg})
+            assistant_msg = turn.get("response")
+            if assistant_msg:
+                messages.append({"role": "assistant", "content": assistant_msg})
+
+        # Current user prompt goes last
+        messages.append({"role": "user", "content": prompt})
+
+        resp = openai.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
         msg = resp.choices[0].message.content.strip()
         return msg
     except Exception as e:
