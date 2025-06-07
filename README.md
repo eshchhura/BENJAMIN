@@ -26,3 +26,16 @@ This repository contains a modular, “Jarvis-style” personal assistant that s
 - `utils/`              : Logging, common helpers.  
 
 For more details, see `docs/` (design documents, architecture diagrams).
+
+## Running Tests
+Before executing the test suite, make sure all dependencies are installed:
+
+```
+pip install -r requirements.txt
+```
+
+Then run the tests with:
+
+```
+pytest
+```
