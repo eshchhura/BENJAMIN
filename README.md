@@ -43,10 +43,10 @@ Pytest test files live in `tests/`. Example unit tests cover the configuration
 loader and NLU adapters. Run them with `pytest` after installing dependencies.
 
 ## Running Tests
-Before executing the test suite, make sure all dependencies are installed:
+Before executing the test suite, install the minimal test dependencies:
 
 ```
-pip install -r requirements.txt
+pip install -r tests/requirements.txt
 ```
 
 Then run the tests with:
