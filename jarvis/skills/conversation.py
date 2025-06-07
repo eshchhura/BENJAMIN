@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 cfg = Config()
 openai.api_key = cfg.get("api_keys", "openai")
+ASSISTANT_NAME = cfg.get("assistant", "name", default="Assistant")
 
 
 def can_handle(intent: str) -> bool:
@@ -19,10 +20,11 @@ def handle(intent: str, params: dict, context: dict) -> str:
     if not prompt:
         return "I'm not sure what you want me to talk about."
     try:
+        system_prompt = f"You are {ASSISTANT_NAME}, a helpful assistant."
         resp = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
         )
