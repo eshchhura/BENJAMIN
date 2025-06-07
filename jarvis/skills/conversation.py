@@ -19,14 +19,14 @@ def handle(intent: str, params: dict, context: dict) -> str:
     if not prompt:
         return "I'm not sure what you want me to talk about."
     try:
-        resp = openai.ChatCompletion.create(
+        resp = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt},
             ],
         )
-        msg = resp.choices[0].message["content"].strip()
+        msg = resp.choices[0].message.content.strip()
         return msg
     except Exception as e:
         logger.exception("ChatGPT request failed: %s", e)
