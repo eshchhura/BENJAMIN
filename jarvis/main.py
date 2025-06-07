@@ -45,7 +45,13 @@ class JarvisAssistant:
         # Initialize NLU components based on configuration
         engine = self.cfg.get("assistant", "nlu_engine", default="spacy")
         if engine == "rasa":
-            self.intent_recognizer = RasaNLUAdapter()
+            adapter = RasaNLUAdapter()
+            if getattr(adapter, "interpreter", None) is None:
+                logger.warning("Rasa model unavailable, falling back to spaCy")
+                self.intent_recognizer = IntentRecognizer()
+                engine = "spacy"
+            else:
+                self.intent_recognizer = adapter
         else:
             self.intent_recognizer = IntentRecognizer()
         self.dialogue_manager = DialogueManager()

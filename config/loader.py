@@ -18,7 +18,7 @@ class MemorySettings(BaseModel):
 class AssistantSettings(BaseModel):
     name: str = "Jarvis"
     language: str = "en"
-    wake_word: str = Field(..., alias="wake_word")
+    wake_word: str = Field("hey jarvis", alias="wake_word")
     stt_engine: str = "vosk"
     tts_engine: str = "pyttsx3"
     nlu_engine: str = "spacy"
