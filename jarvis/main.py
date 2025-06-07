@@ -12,6 +12,7 @@ from jarvis.config import Config
 from jarvis.interfaces.voice_interface import VoiceInterface
 from jarvis.interfaces.terminal_interface import TerminalInterface
 from jarvis.nlu.intent_recognizer import IntentRecognizer
+# RasaInterpreter is imported lazily to avoid heavy dependency unless required
 from jarvis.nlu.dialogue_manager import DialogueManager
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemory
@@ -35,10 +36,16 @@ class JarvisAssistant:
         )
         logger.info("Memory modules initialized.")
 
-        # Initialize NLU components
-        self.intent_recognizer = IntentRecognizer()
+        # Initialize NLU components based on configuration
+        engine = self.cfg.get("assistant", "nlu_engine", default="spacy")
+        if engine == "rasa":
+            from jarvis.nlu.rasa_interpreter import RasaInterpreter
+
+            self.intent_recognizer = RasaInterpreter()
+        else:
+            self.intent_recognizer = IntentRecognizer()
         self.dialogue_manager = DialogueManager()
-        logger.info("NLU modules initialized.")
+        logger.info("NLU modules initialized using %s engine.", engine)
 
         # Initialize skill registry (mapping intents to handler functions)
         self.skill_registry = self._load_skills()
