@@ -16,6 +16,8 @@ from jarvis.nlu.intent_recognizer import IntentRecognizer
 from jarvis.nlu.dialogue_manager import DialogueManager
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemory
+from jarvis.memory.vector_store import VectorStore
+from jarvis.core_controller import CoreController
 from jarvis.learning.reinforcement import ReinforcementAgent
 from jarvis.utils.logger import get_logger
 
@@ -34,6 +36,9 @@ class JarvisAssistant:
         self.stm = ShortTermMemory(
             capacity=self.cfg.get("assistant", "memory", "short_term_capacity")
         )
+        self.vector_store = VectorStore(
+            self.cfg.get("assistant", "memory", "vector_store_path")
+        )
         logger.info("Memory modules initialized.")
 
         # Initialize NLU components based on configuration
@@ -51,6 +56,15 @@ class JarvisAssistant:
         self.skill_registry = self._load_skills()
         logger.info("Skill registry created with %d skills.", len(self.skill_registry))
 
+        self.controller = CoreController(
+            self.intent_recognizer,
+            self.dialogue_manager,
+            self.stm,
+            self.ltm,
+            self.vector_store,
+            self.skill_registry,
+        )
+        
         # Initialize learning agent (RL) for proactive suggestions
         self.rl_agent = ReinforcementAgent(model_path="models/rl_policy_final.zip")
         logger.info("Reinforcement learning agent loaded.")
@@ -95,12 +109,7 @@ class JarvisAssistant:
     def process_input(self, raw_text: str, source: str = "chat") -> str:
         """Process input text and return a response string."""
         logger.debug("Input received [%s]: %s", source, raw_text)
-        intent, entities = self.intent_recognizer.parse(raw_text)
-        context = self.stm.get_context()
-        intent, entities = self.dialogue_manager.resolve_follow_up(intent, entities, context)
-        entities["text"] = raw_text
-        response = self._dispatch_intent(intent, entities, context)
-        self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
+        response = self.controller.handle_input(raw_text)
         self.rl_agent.observe(turn=self.stm.get_recent_turns(), memory=self.ltm)
         return response
 
@@ -119,21 +128,6 @@ class JarvisAssistant:
         if self.terminal_interface:
             self.terminal_interface.print(response)
 
-    def _dispatch_intent(self, intent: str, params: dict, context: dict) -> str:
-        """
-        Find the first skill module whose can_handle(intent) returns True,
-        then call its handle() method.
-        If no skill can handle it, return a fallback message.
-        """
-        # Pass recent conversation turns so skills can leverage short term memory
-        ctx = dict(context) if context else {}
-        ctx["recent_turns"] = self.stm.get_recent_turns()
-
-        for skill in self.skill_registry:
-            if skill.can_handle(intent):
-                return skill.handle(intent, params, ctx)
-        logger.warning("No skill found to handle intent '%s'", intent)
-        return "Sorry, I didn’t understand that. Can you rephrase?"
 
     def start(self):
         """Start both interfaces and set running=True."""
