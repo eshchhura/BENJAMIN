@@ -7,7 +7,7 @@ assistant:
   wake_word: "hey jarvis"             # Wake-word phrase
   stt_engine: "vosk"                  # Options: 'vosk', 'whisper', etc.
   tts_engine: "pyttsx3"               # Options: 'pyttsx3', 'coqui', 'gtts'
-  nlu_engine: "spacy"                 # Options: 'spacy'
+  nlu_engine: "spacy"                 # Options: 'spacy', 'rasa'
   memory:
     short_term_capacity: 50           # Number of recent turns to keep in RAM
     long_term_db_path: "data/memory.db"

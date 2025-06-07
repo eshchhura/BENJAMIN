@@ -12,10 +12,12 @@ from jarvis.config import Config
 from jarvis.interfaces.voice_interface import VoiceInterface
 from jarvis.interfaces.terminal_interface import TerminalInterface
 from jarvis.nlu.intent_recognizer import IntentRecognizer
+# RasaInterpreter is imported lazily to avoid heavy dependency unless required
 from jarvis.nlu.dialogue_manager import DialogueManager
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemory
 from jarvis.memory.vector_store import VectorStore
+from jarvis.core_controller import CoreController
 from jarvis.learning.reinforcement import ReinforcementAgent
 from jarvis.utils.logger import get_logger
 
@@ -39,15 +41,30 @@ class JarvisAssistant:
         )
         logger.info("Memory modules initialized.")
 
-        # Initialize NLU components
-        self.intent_recognizer = IntentRecognizer()
+        # Initialize NLU components based on configuration
+        engine = self.cfg.get("assistant", "nlu_engine", default="spacy")
+        if engine == "rasa":
+            from jarvis.nlu.rasa_interpreter import RasaInterpreter
+
+            self.intent_recognizer = RasaInterpreter()
+        else:
+            self.intent_recognizer = IntentRecognizer()
         self.dialogue_manager = DialogueManager()
-        logger.info("NLU modules initialized.")
+        logger.info("NLU modules initialized using %s engine.", engine)
 
         # Initialize skill registry (mapping intents to handler functions)
         self.skill_registry = self._load_skills()
         logger.info("Skill registry created with %d skills.", len(self.skill_registry))
 
+        self.controller = CoreController(
+            self.intent_recognizer,
+            self.dialogue_manager,
+            self.stm,
+            self.ltm,
+            self.vector_store,
+            self.skill_registry,
+        )
+        
         # Initialize learning agent (RL) for proactive suggestions
         self.rl_agent = ReinforcementAgent(model_path="models/rl_policy_final.zip")
         logger.info("Reinforcement learning agent loaded.")
@@ -100,6 +117,9 @@ class JarvisAssistant:
         response = self._dispatch_intent(intent, entities, context)
         self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
         self.vector_store.store(raw_text)
+
+        response = self.controller.handle_input(raw_text)
+
         self.rl_agent.observe(turn=self.stm.get_recent_turns(), memory=self.ltm)
         return response
 
@@ -135,6 +155,7 @@ class JarvisAssistant:
                 return skill.handle(intent, params, ctx)
         logger.warning("No skill found to handle intent '%s'", intent)
         return "Sorry, I didn’t understand that. Can you rephrase?"
+
 
     def start(self):
         """Start both interfaces and set running=True."""
