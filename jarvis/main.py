@@ -12,6 +12,7 @@ from jarvis.config import Config
 from jarvis.interfaces.voice_interface import VoiceInterface
 from jarvis.interfaces.terminal_interface import TerminalInterface
 from jarvis.nlu.intent_recognizer import IntentRecognizer
+from jarvis.nlu.recognizer import RasaNLUAdapter
 # RasaInterpreter is imported lazily to avoid heavy dependency unless required
 from jarvis.nlu.dialogue_manager import DialogueManager
 from jarvis.memory.short_term import ShortTermMemory
@@ -44,9 +45,7 @@ class JarvisAssistant:
         # Initialize NLU components based on configuration
         engine = self.cfg.get("assistant", "nlu_engine", default="spacy")
         if engine == "rasa":
-            from jarvis.nlu.rasa_interpreter import RasaInterpreter
-
-            self.intent_recognizer = RasaInterpreter()
+            self.intent_recognizer = RasaNLUAdapter()
         else:
             self.intent_recognizer = IntentRecognizer()
         self.dialogue_manager = DialogueManager()
@@ -87,24 +86,9 @@ class JarvisAssistant:
             can_handle(intent: str) -> bool
             handle(intent: str, params: dict, context: dict) -> str
         """
-        from jarvis.skills import (
-            file_manager,
-            scheduler,
-            coding_helper,
-            smart_home,
-            info_query,
-            conversation,
-        )
+        from jarvis import skills
 
-        # Example registry: list of skill modules
-        return [
-            file_manager,
-            scheduler,
-            coding_helper,
-            smart_home,
-            info_query,
-            conversation,
-        ]
+        return skills.load_skills()
 
     def process_input(self, raw_text: str, source: str = "chat") -> str:
         """Process input text and return a response string."""
@@ -152,7 +136,10 @@ class JarvisAssistant:
 
         for skill in self.skill_registry:
             if skill.can_handle(intent):
-                return skill.handle(intent, params, ctx)
+                result = skill.handle({"intent": intent, "entities": params, "context": ctx})
+                if isinstance(result, dict):
+                    return result.get("text", "")
+                return str(result)
         logger.warning("No skill found to handle intent '%s'", intent)
         return "Sorry, I didn’t understand that. Can you rephrase?"
 

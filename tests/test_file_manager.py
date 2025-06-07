@@ -15,7 +15,7 @@ def test_search_file(tmp_path):
     cwd = os.getcwd()
     os.chdir(tmp_path)
     try:
-        result = file_manager.handle("search_file", {"query": "note"}, {})
+        result = file_manager.handle({"intent": "search_file", "entities": {"query": "note"}, "context": {}})["text"]
     finally:
         os.chdir(cwd)
     assert "note.txt" in result
@@ -25,7 +25,7 @@ def test_open_file_missing(tmp_path):
     cwd = os.getcwd()
     os.chdir(tmp_path)
     try:
-        result = file_manager.handle("open_file", {"file_name": "missing.txt"}, {})
+        result = file_manager.handle({"intent": "open_file", "entities": {"file_name": "missing.txt"}, "context": {}})["text"]
     finally:
         os.chdir(cwd)
     assert "couldn't find" in result.lower()
@@ -38,10 +38,8 @@ def test_move_file(tmp_path):
     os.chdir(tmp_path)
     try:
         result = file_manager.handle(
-            "move_file",
-            {"source": "a.txt", "destination": "dest/b.txt"},
-            {},
-        )
+            {"intent": "move_file", "entities": {"source": "a.txt", "destination": "dest/b.txt"}, "context": {}}
+        )["text"]
     finally:
         os.chdir(cwd)
     dest_file = tmp_path / "dest" / "b.txt"

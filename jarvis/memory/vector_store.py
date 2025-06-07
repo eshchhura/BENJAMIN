@@ -6,6 +6,7 @@
 
 import os
 import logging
+import asyncio
 from typing import List, Optional
 
 try:
@@ -31,6 +32,15 @@ from .cache import LRUCache
 
 logger = logging.getLogger(__name__)
 
+
+def initialize_store(index_path: str, dim: int):
+    """Create or load a FAISS index if available."""
+    if faiss is not None:
+        if os.path.exists(index_path):
+            return faiss.read_index(index_path)
+        return faiss.IndexFlatL2(dim)
+    return np.empty((0, dim), dtype=np.float32)
+
 class VectorStore:
     """Simple sentence embedding store with optional FAISS backend."""
 
@@ -42,14 +52,12 @@ class VectorStore:
         self.texts: List[str] = []
         self.cache = LRUCache(maxsize=cache_size)
 
+        backend = initialize_store(index_path, self.dim)
         if faiss is not None:
-            if os.path.exists(index_path):
-                self.index = faiss.read_index(index_path)
-            else:
-                self.index = faiss.IndexFlatL2(self.dim)
+            self.index = backend
         else:
             self.index = None
-            self.vectors = np.empty((0, self.dim), dtype=np.float32)
+            self.vectors = backend
 
         logger.info("VectorStore initialized with index path %s.", index_path)
 
@@ -89,6 +97,11 @@ class VectorStore:
         results = [self.texts[i] for i in idxs if i < len(self.texts)]
         self.cache.set(cache_key, results)
         return results
+
+    async def aretrieve(self, query: str, top_k: int = 3) -> List[str]:
+        """Asynchronous wrapper around :meth:`retrieve`."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.retrieve, query, top_k)
 
     def _save_index(self) -> None:
         if faiss is not None:
