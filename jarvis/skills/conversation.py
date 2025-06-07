@@ -1,5 +1,15 @@
 import logging
-import openai
+import types
+
+try:
+    import openai  # type: ignore
+except Exception:  # pragma: no cover - provide dummy for tests
+    openai = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=lambda **_: types.SimpleNamespace(choices=[]))
+        )
+    )
+
 from jarvis.config import Config
 
 logger = logging.getLogger(__name__)

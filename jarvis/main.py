@@ -109,7 +109,17 @@ class JarvisAssistant:
     def process_input(self, raw_text: str, source: str = "chat") -> str:
         """Process input text and return a response string."""
         logger.debug("Input received [%s]: %s", source, raw_text)
+        intent, entities = self.intent_recognizer.parse(raw_text)
+        context = self.stm.get_context()
+        intent, entities = self.dialogue_manager.resolve_follow_up(intent, entities, context)
+        entities["text"] = raw_text
+        context["related_turns"] = self.vector_store.retrieve(raw_text)
+        response = self._dispatch_intent(intent, entities, context)
+        self.stm.append(turn={"input": raw_text, "intent": intent, "entities": entities, "response": response})
+        self.vector_store.store(raw_text)
+
         response = self.controller.handle_input(raw_text)
+
         self.rl_agent.observe(turn=self.stm.get_recent_turns(), memory=self.ltm)
         return response
 
@@ -127,6 +137,24 @@ class JarvisAssistant:
             self.voice_interface.speak(response)
         if self.terminal_interface:
             self.terminal_interface.print(response)
+
+    def _dispatch_intent(self, intent: str, params: dict, context: dict) -> str:
+        """
+        Find the first skill module whose can_handle(intent) returns True,
+        then call its handle() method.
+        If no skill can handle it, return a fallback message.
+        """
+        # Pass recent conversation turns so skills can leverage short term memory
+        ctx = dict(context) if context else {}
+        ctx["recent_turns"] = self.stm.get_recent_turns()
+        if context and "related_turns" in context:
+            ctx["related_turns"] = context["related_turns"]
+
+        for skill in self.skill_registry:
+            if skill.can_handle(intent):
+                return skill.handle(intent, params, ctx)
+        logger.warning("No skill found to handle intent '%s'", intent)
+        return "Sorry, I didn’t understand that. Can you rephrase?"
 
 
     def start(self):
