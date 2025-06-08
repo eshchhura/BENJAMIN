@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "BENJAMIN"
 version = "0.1.0"
-description = "Jarvis-style personal assistant supporting voice and terminal interaction"
+description = "Benjamin personal assistant supporting voice and terminal interaction"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [

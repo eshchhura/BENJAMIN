@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# Simple launcher script for Jarvis assistant.
+# Simple launcher script for Benjamin assistant.
 # -----------------------------------------------------------------------------
 
 # Activate virtual environment (adjust path if needed):

@@ -2,7 +2,7 @@
 
 This script validates the training data, trains the NLU pipeline and
 evaluates the resulting model. The latest trained model is copied to
-``models/rasa_nlu/`` for use by Jarvis.
+``models/rasa_nlu/`` for use by Benjamin.
 """
 
 from __future__ import annotations

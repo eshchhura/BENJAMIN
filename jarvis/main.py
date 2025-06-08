@@ -1,6 +1,6 @@
 # jarvis/main.py
 # -----------------------------
-# Entry point for the Jarvis assistant.
+# Entry point for the Benjamin assistant.
 # Initializes interfaces, NLU, skill registry, memory, learning modules, then enters the main loop.
 # -----------------------------
 
@@ -24,7 +24,7 @@ from jarvis.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class JarvisAssistant:
+class BenjaminAssistant:
     def __init__(self, enable_voice: bool = True, enable_terminal: bool = True):
         # Load configuration
         self.cfg = Config()
@@ -153,7 +153,7 @@ class JarvisAssistant:
     def start(self):
         """Start both interfaces and set running=True."""
         self.running = True
-        logger.info("Starting Jarvis assistant...")
+        logger.info("Starting Benjamin assistant...")
 
         # Start voice interface listening loop in a separate thread
         if self.voice_interface:
@@ -180,9 +180,9 @@ class JarvisAssistant:
             self.voice_interface.stop()
         if self.terminal_interface:
             self.terminal_interface.stop()
-        logger.info("Jarvis assistant shut down.")
+        logger.info("Benjamin assistant shut down.")
 
 
 if __name__ == "__main__":
-    assistant = JarvisAssistant()
+    assistant = BenjaminAssistant()
     assistant.start()

@@ -1,10 +1,10 @@
-from jarvis.main import JarvisAssistant
+from jarvis.main import BenjaminAssistant
 from jarvis.interfaces.chat_interface import ChatInterface
 from jarvis.interfaces.terminal_interface import TerminalInterface
 
 
 def main():
-    assistant = JarvisAssistant(enable_voice=False, enable_terminal=False)
+    assistant = BenjaminAssistant(enable_voice=False, enable_terminal=False)
     try:
         chat = ChatInterface(assistant.process_input)
     except RuntimeError:

@@ -14,7 +14,7 @@ class TerminalInterface:
     """
     - Runs a loop waiting for user to type commands (no wake-word required).
     - On each line entered, invokes callback(text, source="terminal").
-    - print() simply prefixes text with “[Jarvis]: ”.
+    - print() simply prefixes text with “[Benjamin]: ”.
     """
 
     def __init__(self, callback):
@@ -47,9 +47,9 @@ class TerminalInterface:
 
     def print(self, text: str):
         """
-        Print assistant responses to the terminal (prefix with [Jarvis]).
+        Print assistant responses to the terminal (prefix with [Benjamin]).
         """
-        print(f"[Jarvis]: {text}")
+        print(f"[Benjamin]: {text}")
 
     def stop(self):
         self.running = False

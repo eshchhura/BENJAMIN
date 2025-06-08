@@ -5,6 +5,6 @@ __version__ = "0.1.0"
 
 def get_version():
     """
-    Returns the current version of the Jarvis package.
+    Returns the current version of the Benjamin package.
     """
     return __version__
