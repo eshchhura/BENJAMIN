@@ -9,7 +9,7 @@ import logging.config
 from typing import Any, Optional
 import yaml
 
-from config.loader import JarvisConfig, load_config
+from config.loader import BenjaminConfig, load_config
 
 class Config:
     """Singleton configuration loader."""
@@ -26,7 +26,7 @@ class Config:
         default_path = os.path.join(base, "config", "config.yaml")
         path = config_path or default_path
 
-        self._data: JarvisConfig = load_config(path)
+        self._data: BenjaminConfig = load_config(path)
 
         log_cfg = self._data.logging
         if log_cfg.config_file and os.path.exists(log_cfg.config_file):

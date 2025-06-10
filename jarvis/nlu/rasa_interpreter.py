@@ -2,7 +2,7 @@
 
 This module provides a simple wrapper around ``rasa.nlu.model.Interpreter``
 to make it compatible with the ``IntentRecognizer`` interface used by
-``JarvisAssistant``.
+``BenjaminAssistant``.
 """
 
 from __future__ import annotations

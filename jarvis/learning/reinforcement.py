@@ -1,6 +1,6 @@
 # jarvis/learning/reinforcement.py
 # -----------------------------------
-# Wraps an RL policy (trained offline) to decide whether Jarvis should proactively interject.
+# Wraps an RL policy (trained offline) to decide whether Benjamin should proactively interject.
 # For example, “You have a meeting in 15 minutes—should I remind you now?”
 # -----------------------------------
 

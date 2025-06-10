@@ -18,7 +18,7 @@ class ChatInterface:
             self.window = tk.Tk()
         except TclError as e:  # pragma: no cover - GUI may be unavailable
             raise RuntimeError("Tkinter GUI unavailable") from e
-        self.window.title("Jarvis Chat")
+        self.window.title("Benjamin Chat")
 
         self.chat_log = ScrolledText(self.window, state="disabled", width=80, height=20)
         self.chat_log.pack(padx=10, pady=10, fill="both", expand=True)
@@ -41,7 +41,7 @@ class ChatInterface:
             self._append(f"You: {user_text}")
             response = self.handle_func(user_text)
             if response:
-                self._append(f"Jarvis: {response}")
+                self._append(f"Benjamin: {response}")
         self.entry_var.set("")
 
     def _append(self, text: str):

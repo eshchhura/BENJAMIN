@@ -1,12 +1,12 @@
-# Jarvis Assistant (Python-Based)
+# Benjamin Assistant (Python-Based)
 
 **Overview:**  
-This repository contains a modular, “Jarvis-style” personal assistant that supports voice and terminal interaction, intent recognition, skill modules (file management, scheduling, coding help, smart home control, information queries), continuous learning (pattern mining & RL), and persistent memory (short-term & long-term).
+This repository contains a modular personal assistant formerly called Jarvis. It supports voice and terminal interaction, intent recognition, skill modules (file management, scheduling, coding help, smart home control, information queries), continuous learning (pattern mining & RL), and persistent memory (short-term & long-term).
 
 **Directory Structure:**  
 - `config/`             : YAML configurations (general settings, logging).
   Configuration parsing now uses **pydantic** models via `config/loader.py`.
-- `scripts/`            : Utility scripts (e.g., launching Jarvis, training models).
+- `scripts/`            : Utility scripts (e.g., launching Benjamin, training models).
 - `jarvis/`             : Main source code (interfaces, NLU, skills, memory, learning, utils).  
 - `tests/`              : Unit tests for core components.  
 
@@ -15,7 +15,7 @@ This repository contains a modular, “Jarvis-style” personal assistant that s
 2. Install dependencies: `pip install -r requirements.txt`.  
 3. Populate `config/config.yaml` with your API keys, device names, etc.
 4. To try a simple chat window run: `python -m jarvis` or `python -m jarvis.chat_app`.
-   Voice/terminal mode is still available via `bash scripts/run_jarvis.sh`.
+   Voice/terminal mode is still available via `bash scripts/run_benjamin.sh`.
 5. Train the spaCy based NLU model with `python scripts/train_spacy_nlu.py` (optional).
 6. To use the Rasa NLU engine instead, first train the Rasa model by running
    `python scripts/train_rasa_nlu.py`. The script validates the training data,

@@ -1,10 +1,10 @@
 # -------------------------------------------------------------------------
-# Global settings for Jarvis assistant
+# Global settings for Benjamin assistant
 # -------------------------------------------------------------------------
 assistant:
-  name: "Jarvis"                      # Assistant’s display name
+  name: "Benjamin"                    # Assistant’s display name
   language: "en"                      # Default language
-  wake_word: "hey jarvis"             # Wake-word phrase
+  wake_word: "hey benjamin"           # Wake-word phrase
   stt_engine: "vosk"                  # Options: 'vosk', 'whisper', etc.
   tts_engine: "pyttsx3"               # Options: 'pyttsx3', 'coqui', 'gtts'
   nlu_engine: "rasa"                  # Options: 'spacy', 'rasa'
@@ -41,7 +41,7 @@ logging:
       class: logging.FileHandler
       level: DEBUG
       formatter: detailed
-      filename: "logs/jarvis.log"
+      filename: "logs/benjamin.log"
   root:
     level: INFO
     handlers: [console, file]

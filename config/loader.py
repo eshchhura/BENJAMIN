@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Configuration loader for Jarvis assistant."""
+"""Configuration loader for Benjamin assistant."""
 
 from pathlib import Path
 from typing import Optional
@@ -16,9 +16,9 @@ class MemorySettings(BaseModel):
 
 
 class AssistantSettings(BaseModel):
-    name: str = "Jarvis"
+    name: str = "Benjamin"
     language: str = "en"
-    wake_word: str = Field("hey jarvis", alias="wake_word")
+    wake_word: str = Field("hey benjamin", alias="wake_word")
     stt_engine: str = "vosk"
     tts_engine: str = "pyttsx3"
     nlu_engine: str = "spacy"
@@ -41,7 +41,7 @@ class LoggingConfig(BaseModel):
     config_file: Optional[str] = None
 
 
-class JarvisConfig(BaseModel):
+class BenjaminConfig(BaseModel):
     assistant: AssistantSettings
     api_keys: APIKeys = Field(default_factory=APIKeys)
     home_assistant: HomeAssistantConfig = Field(default_factory=HomeAssistantConfig)
@@ -51,9 +51,9 @@ class JarvisConfig(BaseModel):
 _DEF_PATH = Path(__file__).resolve().parent / "config.yaml"
 
 
-def load_config(path: Optional[str] = None) -> JarvisConfig:
+def load_config(path: Optional[str] = None) -> BenjaminConfig:
     """Load and validate configuration from YAML file."""
     cfg_path = Path(path) if path else _DEF_PATH
     with cfg_path.open("r") as f:
         data = yaml.safe_load(f) or {}
-    return JarvisConfig.parse_obj(data)
+    return BenjaminConfig.parse_obj(data)

@@ -1,7 +1,7 @@
 """
 train_rl.py
 
-Script to train the reinforcement learning agent that will help Jarvis decide when to
+Script to train the reinforcement learning agent that will help Benjamin decide when to
 proactively intervene (e.g., remind user, suggest actions). Uses Stable-Baselines3.
 """
 
@@ -16,8 +16,8 @@ def main():
     2. Train an RL model (e.g., PPO).
     3. Save the policy under 'models/rl_policy.zip'.
     """
-    # Placeholder: replace "JarvisEnv-v0" with your actual environment
-    env_id = "JarvisEnv-v0"
+    # Placeholder: replace "BenjaminEnv-v0" with your actual environment
+    env_id = "BenjaminEnv-v0"
     try:
         env = gym.make(env_id)
     except gym.error.Error:
@@ -25,7 +25,7 @@ def main():
 
     model = PPO("MlpPolicy", env, verbose=1)
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path="models/",
-                                             name_prefix="jarvis_rl")
+                                             name_prefix="benjamin_rl")
     model.learn(total_timesteps=100000, callback=checkpoint_callback)
     model.save("models/rl_policy_final")
     print("RL policy training complete. Model saved at 'models/rl_policy_final.zip'.")

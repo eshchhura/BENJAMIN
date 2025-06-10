@@ -51,7 +51,7 @@ class VoiceInterface:
         Runs until self.running = False.
         """
         self.running = True
-        wake_word = self.cfg.get("assistant", "wake_word", default="hey jarvis")
+        wake_word = self.cfg.get("assistant", "wake_word", default="hey benjamin")
         with self.microphone as source:
             self.recognizer.adjust_for_ambient_noise(source)  # initial calibration
         logger.info("VoiceInterface listening for wake-word '%s'...", wake_word)
@@ -93,7 +93,7 @@ class VoiceInterface:
         if not text:
             return
         # Print to console for clarity
-        print(f"[Jarvis]: {text}")
+        print(f"[Benjamin]: {text}")
         if self.tts:
             self.tts.say(text)
             self.tts.runAndWait()
