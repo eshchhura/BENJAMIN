@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
-from core.approvals.schemas import PendingApproval
-from core.approvals.store import ApprovalStore
-from core.orchestration.schemas import PlanStep
+from benjamin.core.approvals.schemas import PendingApproval
+from benjamin.core.approvals.store import ApprovalStore
+from benjamin.core.orchestration.schemas import PlanStep
 
 
 def _record(record_id: str, created_delta_hours: int = 0, expires_delta_hours: int = 2) -> PendingApproval:

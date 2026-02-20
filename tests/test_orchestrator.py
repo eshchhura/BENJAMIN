@@ -1,4 +1,4 @@
-from core.orchestration.orchestrator import Orchestrator
+from benjamin.core.orchestration.orchestrator import Orchestrator
 
 
 def test_orchestrator_runs_plan_steps() -> None:

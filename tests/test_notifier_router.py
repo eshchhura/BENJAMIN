@@ -1,6 +1,6 @@
-from core.memory.manager import MemoryManager
-from core.notifications.notifier import NotificationRouter
-from core.scheduler.jobs import run_daily_briefing, run_reminder
+from benjamin.core.memory.manager import MemoryManager
+from benjamin.core.notifications.notifier import NotificationRouter
+from benjamin.core.scheduler.jobs import run_daily_briefing, run_reminder
 
 
 class RecorderNotifier:

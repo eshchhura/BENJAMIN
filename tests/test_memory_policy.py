@@ -1,4 +1,4 @@
-from core.memory.write_policy import MemoryWritePolicy
+from benjamin.core.memory.write_policy import MemoryWritePolicy
 
 
 def test_memory_policy_filters_short_text() -> None:

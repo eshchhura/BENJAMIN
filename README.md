@@ -4,9 +4,9 @@ A starter orchestration platform for agentic workflows.
 
 ## Layout
 
-- `apps/api`: FastAPI service exposing chat + memory + jobs endpoints.
-- `apps/worker`: background scheduler worker.
-- `core`: orchestration, skills, scheduler, notifications, memory, model adapters, and observability.
+- `src/benjamin/apps/api`: FastAPI service exposing chat + memory + jobs endpoints.
+- `src/benjamin/apps/worker`: background scheduler worker.
+- `src/benjamin/core`: orchestration, skills, scheduler, notifications, memory, model adapters, and observability.
 - `infra`: local infra definitions and migrations.
 - `tests`: unit tests for core behavior.
 
@@ -22,8 +22,8 @@ pytest
 ## Run services
 
 ```bash
-uvicorn apps.api.main:app --reload
-python -m apps.worker.worker
+benjamin-api
+benjamin-worker
 ```
 
 ## Configuration

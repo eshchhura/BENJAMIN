@@ -1,4 +1,4 @@
-from core.memory.manager import MemoryManager
+from benjamin.core.memory.manager import MemoryManager
 
 
 def test_semantic_upsert_overwrite_and_search(tmp_path) -> None:
