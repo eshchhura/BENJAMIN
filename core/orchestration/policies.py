@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from core.skills.base import Skill
+
 
 @dataclass
 class PolicyDecision:
@@ -12,3 +14,7 @@ class PolicyEngine:
         if "delete" in action.lower():
             return PolicyDecision(allowed=False, reason="Destructive action requires approval")
         return PolicyDecision(allowed=True, reason="Allowed")
+
+    def requires_approval(self, skill: Skill, step_requires_approval: bool = False) -> bool:
+        side_effect = getattr(skill, "side_effect", "read")
+        return step_requires_approval or side_effect == "write"

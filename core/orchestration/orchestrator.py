@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+
+from core.approvals.service import ApprovalService
+from core.approvals.store import ApprovalStore
 from core.memory.manager import MemoryManager
 from core.observability.trace import Trace
 from core.scheduler.scheduler import SchedulerService
@@ -24,6 +28,10 @@ class Orchestrator:
         self.planner = Planner(llm_enabled=llm_planner_enabled)
         self.executor = Executor()
         self.registry = SkillRegistry()
+        self.approval_service = ApprovalService(
+            store=ApprovalStore(state_dir=self.memory_manager.state_dir),
+            memory_manager=self.memory_manager,
+        )
         self.registry.register(RemindersCreateSkill(self.scheduler_service, str(self.memory_manager.state_dir)))
         self.registry.register(BriefingsDailySkill(str(self.memory_manager.state_dir)))
 
@@ -38,10 +46,26 @@ class Orchestrator:
             },
         )
 
-        context = ContextPack(goal=request.message, memory=memory)
+        context = ContextPack(goal=request.message, memory=memory, cwd=os.getcwd())
         plan = self.planner.plan(request.message, memory=context.memory)
-        outputs = [self.executor.execute(step) for step in plan.steps]
-        final_response = outputs[-1]
+        step_results = self.executor.execute_plan(
+            plan,
+            context=context,
+            registry=self.registry,
+            trace=trace,
+            approval_service=self.approval_service,
+            requester={"source": "chat", "task_id": request.message},
+        )
+        outputs = [result.output or result.error or "" for result in step_results]
+        approval_error = next((result.error for result in step_results if result.error and result.error.startswith("approval_required:")), None)
+        if approval_error:
+            approval_id = approval_error.split(":", 1)[1]
+            final_response = (
+                f"Approval required to proceed. Approval ID: {approval_id}. "
+                "Use GET /approvals and POST /approvals/{id}/approve to continue."
+            )
+        else:
+            final_response = outputs[-1] if outputs else ""
 
         if self.memory_manager.autowrite_enabled:
             proposal = self.memory_manager.propose_writes(request.message, final_response)
@@ -59,6 +83,7 @@ class Orchestrator:
             steps=plan.steps,
             outputs=outputs,
             final_response=final_response,
+            step_results=step_results,
             trace_events=trace.events,
             context=context,
         )

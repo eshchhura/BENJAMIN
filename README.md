@@ -35,6 +35,8 @@ python -m apps.worker.worker
 - `BENJAMIN_DAILY_BRIEFING_TIME`: default daily briefing time in local `HH:MM` format (default `09:00`).
 - `BENJAMIN_TIMEZONE`: IANA timezone name used by scheduler cron jobs (default `America/New_York`).
 - `BENJAMIN_TEST_MODE`: when set, scheduler uses in-memory storage and does not start worker threads.
+- `BENJAMIN_APPROVALS_AUTOCLEAN`: approval retention policy (`on`/`off`, default `on`).
+- `BENJAMIN_APPROVALS_TTL_HOURS`: pending approval time-to-live in hours (default `72`).
 
 ## Memory API examples
 
@@ -69,4 +71,26 @@ curl -X POST "http://localhost:8000/jobs/daily-briefing" \
 
 # Remove a job
 curl -X DELETE "http://localhost:8000/jobs/daily-briefing"
+```
+
+## Approval workflow (API-only)
+
+```bash
+# 1) Trigger a write action through chat (returns "Approval required ...")
+curl -X POST "http://localhost:8000/chat/" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"reminders.create {\"message\":\"Submit expense report\",\"run_at_iso\":\"2026-02-21T14:00:00+00:00\"}"}'
+
+# 2) List pending approvals
+curl "http://localhost:8000/approvals?status=pending"
+
+# 3a) Approve and execute the stored step
+curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/approve" \
+  -H "Content-Type: application/json" \
+  -d '{"approver_note":"Looks good"}'
+
+# 3b) Or reject it
+curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"Not needed anymore"}'
 ```
