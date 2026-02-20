@@ -4,10 +4,13 @@ import os
 
 from benjamin.core.approvals.service import ApprovalService
 from benjamin.core.approvals.store import ApprovalStore
+from benjamin.core.integrations.base import CalendarConnector, EmailConnector
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.observability.trace import Trace
 from benjamin.core.scheduler.scheduler import SchedulerService
 from benjamin.core.skills.builtin.briefings import BriefingsDailySkill
+from benjamin.core.skills.builtin.calendar_read import CalendarSearchSkill
+from benjamin.core.skills.builtin.gmail_read import GmailReadMessageSkill, GmailSearchSkill, GmailThreadSummarySkill
 from benjamin.core.skills.builtin.reminders import RemindersCreateSkill
 from benjamin.core.skills.registry import SkillRegistry
 
@@ -22,6 +25,8 @@ class Orchestrator:
         memory_manager: MemoryManager | None = None,
         llm_planner_enabled: bool = False,
         scheduler_service: SchedulerService | None = None,
+        calendar_connector: CalendarConnector | None = None,
+        email_connector: EmailConnector | None = None,
     ) -> None:
         self.memory_manager = memory_manager or MemoryManager()
         self.scheduler_service = scheduler_service or SchedulerService(state_dir=self.memory_manager.state_dir)
@@ -34,6 +39,10 @@ class Orchestrator:
         )
         self.registry.register(RemindersCreateSkill(self.scheduler_service, str(self.memory_manager.state_dir)))
         self.registry.register(BriefingsDailySkill(str(self.memory_manager.state_dir)))
+        self.registry.register(CalendarSearchSkill(calendar_connector))
+        self.registry.register(GmailSearchSkill(email_connector))
+        self.registry.register(GmailReadMessageSkill(email_connector))
+        self.registry.register(GmailThreadSummarySkill(email_connector))
 
     def handle(self, request: ChatRequest) -> OrchestrationResult:
         trace = Trace(task=request.message)
