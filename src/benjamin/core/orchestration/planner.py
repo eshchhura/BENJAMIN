@@ -34,6 +34,34 @@ class Planner:
                 ],
             )
 
+        if goal.startswith("calendar.create_event "):
+            payload = goal[len("calendar.create_event ") :].strip()
+            return Plan(
+                goal=goal,
+                steps=[
+                    PlanStep(
+                        description="Create calendar event",
+                        skill_name="calendar.create_event",
+                        args=payload,
+                        requires_approval=True,
+                    )
+                ],
+            )
+
+        if goal.startswith("gmail.draft_email "):
+            payload = goal[len("gmail.draft_email ") :].strip()
+            return Plan(
+                goal=goal,
+                steps=[
+                    PlanStep(
+                        description="Create Gmail draft",
+                        skill_name="gmail.draft_email",
+                        args=payload,
+                        requires_approval=True,
+                    )
+                ],
+            )
+
         if self.llm_enabled:
             memory_block = self._memory_block(memory or {"semantic": [], "episodic": []})
             user_prompt = f"{task_prompt(goal)}\n\nRetrieved memory:\n{memory_block}\n\nUser goal: {goal}"

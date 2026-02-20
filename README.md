@@ -41,7 +41,7 @@ benjamin-worker
 - `BENJAMIN_GOOGLE_TOKEN_PATH`: OAuth token JSON path (default `<BENJAMIN_STATE_DIR>/google_token.json`).
 - `BENJAMIN_GOOGLE_CREDENTIALS_PATH`: optional OAuth client secrets path (used only for external token bootstrap tooling).
 - `BENJAMIN_GMAIL_QUERY_IMPORTANT`: default Gmail query for briefing email section.
-- `BENJAMIN_CALENDAR_ID`: default calendar id for reads (default `primary`).
+- `BENJAMIN_CALENDAR_ID`: default calendar id for reads and event creation (default `primary`).
 - `BENJAMIN_TEST_MODE`: when set, scheduler uses in-memory storage and does not start worker threads.
 - `BENJAMIN_APPROVALS_AUTOCLEAN`: approval retention policy (`on`/`off`, default `on`).
 - `BENJAMIN_APPROVALS_TTL_HOURS`: pending approval time-to-live in hours (default `72`).
@@ -81,26 +81,31 @@ curl -X POST "http://localhost:8000/jobs/daily-briefing" \
 curl -X DELETE "http://localhost:8000/jobs/daily-briefing"
 ```
 
+
+Write skills (approval-gated):
+- `calendar.create_event`: create a Google Calendar event.
+- `gmail.draft_email`: create a Gmail draft (no send).
+
 ## Approval workflow (API-only)
 
 ```bash
 # 1) Trigger a write action through chat (returns "Approval required ...")
-curl -X POST "http://localhost:8000/chat/" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"reminders.create {\"message\":\"Submit expense report\",\"run_at_iso\":\"2026-02-21T14:00:00+00:00\"}"}'
+curl -X POST "http://localhost:8000/chat/"   -H "Content-Type: application/json"   -d '{"message":"calendar.create_event {\"title\":\"Design review\",\"start_iso\":\"2026-02-21T14:00:00-05:00\",\"end_iso\":\"2026-02-21T14:30:00-05:00\"}"}'
+
+# Alternate write skill (also approval-gated)
+curl -X POST "http://localhost:8000/chat/"   -H "Content-Type: application/json"   -d '{"message":"gmail.draft_email {\"to\":[\"alex@example.com\"],\"subject\":\"Status update\",\"body\":\"Drafting the weekly status update.\"}"}'
 
 # 2) List pending approvals
 curl "http://localhost:8000/approvals?status=pending"
 
 # 3a) Approve and execute the stored step
-curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/approve" \
-  -H "Content-Type: application/json" \
-  -d '{"approver_note":"Looks good"}'
+curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/approve"   -H "Content-Type: application/json"   -d '{"approver_note":"Looks good"}'
 
 # 3b) Or reject it
-curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject" \
-  -H "Content-Type: application/json" \
-  -d '{"reason":"Not needed anymore"}'
+curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject"   -H "Content-Type: application/json"   -d '{"reason":"Not needed anymore"}'
+
+# 4) Inspect approval record to see stored execution result/error
+curl "http://localhost:8000/approvals"
 ```
 
 ## Integrations status

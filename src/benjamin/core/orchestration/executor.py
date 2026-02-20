@@ -45,7 +45,10 @@ class Executor:
                     )
                 return StepResult(step_id=step.id, ok=False, error=f"approval_required:{approval.id}")
 
-            result = skill.run(step.args)
+            try:
+                result = skill.run(step.args)
+            except Exception as exc:
+                return StepResult(step_id=step.id, ok=False, error=str(exc))
             return StepResult(step_id=step.id, ok=True, output=result.content)
 
         return StepResult(step_id=step.id, ok=True, output=f"done:{step.description}")
