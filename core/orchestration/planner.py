@@ -1,4 +1,10 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Any
+
+from core.models.llm import LLM
+from core.models.prompts import task_prompt
 
 
 @dataclass
@@ -8,5 +14,32 @@ class Plan:
 
 
 class Planner:
-    def plan(self, goal: str) -> Plan:
+    def __init__(self, llm_enabled: bool = False, llm: LLM | None = None) -> None:
+        self.llm_enabled = llm_enabled
+        self.llm = llm or LLM()
+
+    def plan(self, goal: str, memory: dict[str, list[Any]] | None = None) -> Plan:
+        if self.llm_enabled:
+            memory_block = self._memory_block(memory or {"semantic": [], "episodic": []})
+            user_prompt = f"{task_prompt(goal)}\n\nRetrieved memory:\n{memory_block}\n\nUser goal: {goal}"
+            llm_step = self.llm.complete(user_prompt)
+            return Plan(goal=goal, steps=[f"Analyze: {goal}", llm_step])
+
         return Plan(goal=goal, steps=[f"Analyze: {goal}", f"Execute: {goal}"])
+
+    def _memory_block(self, memory: dict[str, list[Any]]) -> str:
+        semantic = memory.get("semantic", [])
+        episodic = memory.get("episodic", [])
+
+        lines: list[str] = ["- Semantic:"]
+        for fact in semantic:
+            lines.append(f"  - {fact.key}: {fact.value}")
+
+        lines.append("- Recent episodes:")
+        for episode in episodic[-3:]:
+            lines.append(f"  - {episode.summary}")
+
+        block = "\n".join(lines)
+        if len(block) <= 1500:
+            return block
+        return block[:1499].rstrip() + "…"
