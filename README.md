@@ -17,6 +17,9 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 pytest
+
+# Optional Google read-only integrations
+pip install -e .[dev,google]
 ```
 
 ## Run services
@@ -34,6 +37,11 @@ benjamin-worker
 - `BENJAMIN_DISCORD_WEBHOOK_URL`: Discord webhook URL (required when `discord` notifier is enabled).
 - `BENJAMIN_DAILY_BRIEFING_TIME`: default daily briefing time in local `HH:MM` format (default `09:00`).
 - `BENJAMIN_TIMEZONE`: IANA timezone name used by scheduler cron jobs (default `America/New_York`).
+- `BENJAMIN_GOOGLE_ENABLED`: enable Google calendar/gmail read integrations (`on`/`off`, default `off`).
+- `BENJAMIN_GOOGLE_TOKEN_PATH`: OAuth token JSON path (default `<BENJAMIN_STATE_DIR>/google_token.json`).
+- `BENJAMIN_GOOGLE_CREDENTIALS_PATH`: optional OAuth client secrets path (used only for external token bootstrap tooling).
+- `BENJAMIN_GMAIL_QUERY_IMPORTANT`: default Gmail query for briefing email section.
+- `BENJAMIN_CALENDAR_ID`: default calendar id for reads (default `primary`).
 - `BENJAMIN_TEST_MODE`: when set, scheduler uses in-memory storage and does not start worker threads.
 - `BENJAMIN_APPROVALS_AUTOCLEAN`: approval retention policy (`on`/`off`, default `on`).
 - `BENJAMIN_APPROVALS_TTL_HOURS`: pending approval time-to-live in hours (default `72`).
@@ -94,3 +102,15 @@ curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject" \
   -H "Content-Type: application/json" \
   -d '{"reason":"Not needed anymore"}'
 ```
+
+## Integrations status
+
+```bash
+curl "http://localhost:8000/integrations/status"
+```
+
+When Google integrations are configured (`BENJAMIN_GOOGLE_ENABLED=on` and token file present), daily briefing includes:
+- Today's schedule (next 12 hours, up to 5 events).
+- Important emails (query from `BENJAMIN_GMAIL_QUERY_IMPORTANT`, up to 5 threads).
+
+If unavailable, briefing remains memory-only.

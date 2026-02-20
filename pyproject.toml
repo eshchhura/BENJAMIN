@@ -21,6 +21,11 @@ dev = [
   "pytest>=8.0",
   "httpx",
 ]
+google = [
+  "google-api-python-client",
+  "google-auth",
+  "google-auth-oauthlib",
+]
 
 [project.scripts]
 benjamin-api = "benjamin.apps.api.main:run"
