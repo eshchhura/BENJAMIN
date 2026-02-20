@@ -43,3 +43,45 @@ class GoogleCalendarConnector:
                 }
             )
         return events
+
+    def create_event(
+        self,
+        calendar_id: str,
+        title: str,
+        start_iso: str,
+        end_iso: str,
+        timezone: str,
+        location: str | None,
+        description: str | None,
+        attendees: list[str] | None,
+    ) -> dict:
+        body = {
+            "summary": title,
+            "start": {"dateTime": start_iso, "timeZone": timezone},
+            "end": {"dateTime": end_iso, "timeZone": timezone},
+        }
+        if location:
+            body["location"] = location
+        if description:
+            body["description"] = description
+        if attendees:
+            body["attendees"] = [{"email": email} for email in attendees]
+
+        try:
+            response = (
+                self.service.events()
+                .insert(calendarId=calendar_id, body=body, fields="id,summary,start,end,htmlLink")
+                .execute()
+            )
+        except Exception as exc:  # pragma: no cover - depends on external client exception class
+            raise RuntimeError(f"google_calendar_create_event_failed: {exc}") from exc
+
+        start = response.get("start", {})
+        end = response.get("end", {})
+        return {
+            "id": response.get("id"),
+            "title": response.get("summary", title),
+            "start_iso": start.get("dateTime") or start_iso,
+            "end_iso": end.get("dateTime") or end_iso,
+            "html_link": response.get("htmlLink"),
+        }

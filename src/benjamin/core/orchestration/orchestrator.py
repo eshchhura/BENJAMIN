@@ -10,7 +10,9 @@ from benjamin.core.observability.trace import Trace
 from benjamin.core.scheduler.scheduler import SchedulerService
 from benjamin.core.skills.builtin.briefings import BriefingsDailySkill
 from benjamin.core.skills.builtin.calendar_read import CalendarSearchSkill
+from benjamin.core.skills.builtin.calendar_write import CalendarCreateEventSkill
 from benjamin.core.skills.builtin.gmail_read import GmailReadMessageSkill, GmailSearchSkill, GmailThreadSummarySkill
+from benjamin.core.skills.builtin.gmail_write import GmailDraftEmailSkill
 from benjamin.core.skills.builtin.reminders import RemindersCreateSkill
 from benjamin.core.skills.registry import SkillRegistry
 
@@ -43,6 +45,8 @@ class Orchestrator:
         self.registry.register(GmailSearchSkill(email_connector))
         self.registry.register(GmailReadMessageSkill(email_connector))
         self.registry.register(GmailThreadSummarySkill(email_connector))
+        self.registry.register(CalendarCreateEventSkill(calendar_connector))
+        self.registry.register(GmailDraftEmailSkill(email_connector))
 
     def handle(self, request: ChatRequest) -> OrchestrationResult:
         trace = Trace(task=request.message)

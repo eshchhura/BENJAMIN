@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
 
 from benjamin.core.integrations.google_auth import build_google_service
@@ -44,6 +45,44 @@ class GoogleGmailConnector:
             "subject": subject,
             "participants": sorted(participants),
             "snippets": snippets,
+        }
+
+
+    def create_draft(
+        self,
+        to: list[str],
+        cc: list[str] | None,
+        bcc: list[str] | None,
+        subject: str,
+        body: str,
+    ) -> dict:
+        message = EmailMessage()
+        message["To"] = ", ".join(to)
+        if cc:
+            message["Cc"] = ", ".join(cc)
+        if bcc:
+            message["Bcc"] = ", ".join(bcc)
+        message["Subject"] = subject
+        message.set_content(body)
+
+        encoded = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+        try:
+            response = (
+                self.service.users()
+                .drafts()
+                .create(userId="me", body={"message": {"raw": encoded}})
+                .execute()
+            )
+        except Exception as exc:  # pragma: no cover - depends on external client exception class
+            raise RuntimeError(f"google_gmail_create_draft_failed: {exc}") from exc
+
+        draft = response.get("message", {})
+        snippet = draft.get("snippet") or body[:200]
+        return {
+            "draft_id": response.get("id") or draft.get("id"),
+            "subject": subject,
+            "to": to,
+            "snippet": snippet,
         }
 
     def _normalize_message(self, message_id: str, include_body: bool = False) -> dict:
