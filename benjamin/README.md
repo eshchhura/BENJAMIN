@@ -35,3 +35,25 @@ curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"search banana","cwd":"."}'
 ```
+
+## LLM planner configuration
+
+Planner is optional and disabled by default.
+
+- `BENJAMIN_LLM_MODE` = `off` (default) or `http`
+- `BENJAMIN_LLM_HTTP_URL` = HTTP endpoint URL (required when mode=`http`)
+- `BENJAMIN_LLM_HTTP_TOKEN` = optional bearer token
+
+When enabled, BENJAMIN sends:
+
+```json
+{ "system": "...", "user": "...", "schema": { ... } }
+```
+
+and expects:
+
+```json
+{ "json": { "steps": [ ... ] } }
+```
+
+If planner output is invalid, BENJAMIN falls back to keyword planning.
