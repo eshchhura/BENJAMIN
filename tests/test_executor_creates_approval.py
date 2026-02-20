@@ -1,9 +1,9 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from core.memory.manager import MemoryManager
-from core.orchestration.orchestrator import Orchestrator
-from core.orchestration.schemas import ChatRequest
+from benjamin.core.memory.manager import MemoryManager
+from benjamin.core.orchestration.orchestrator import Orchestrator
+from benjamin.core.orchestration.schemas import ChatRequest
 
 
 def test_executor_creates_approval_for_write_step(tmp_path) -> None:

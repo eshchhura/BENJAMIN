@@ -1,6 +1,6 @@
-from core.memory.manager import MemoryManager
-from core.orchestration.orchestrator import Orchestrator
-from core.orchestration.schemas import ChatRequest
+from benjamin.core.memory.manager import MemoryManager
+from benjamin.core.orchestration.orchestrator import Orchestrator
+from benjamin.core.orchestration.schemas import ChatRequest
 
 
 def _get_event(result, name: str):

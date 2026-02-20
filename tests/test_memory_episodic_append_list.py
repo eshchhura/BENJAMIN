@@ -1,4 +1,4 @@
-from core.memory.manager import MemoryManager
+from benjamin.core.memory.manager import MemoryManager
 
 
 def test_episodic_append_and_recent_order(tmp_path) -> None:
