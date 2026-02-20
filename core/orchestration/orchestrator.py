@@ -1,17 +1,31 @@
 from __future__ import annotations
 
+from core.memory.manager import MemoryManager
+from core.observability.trace import Trace
+from core.scheduler.scheduler import SchedulerService
+from core.skills.builtin.briefings import BriefingsDailySkill
+from core.skills.builtin.reminders import RemindersCreateSkill
+from core.skills.registry import SkillRegistry
+
 from .executor import Executor
 from .planner import Planner
 from .schemas import ChatRequest, ContextPack, OrchestrationResult
-from core.memory.manager import MemoryManager
-from core.observability.trace import Trace
 
 
 class Orchestrator:
-    def __init__(self, memory_manager: MemoryManager | None = None, llm_planner_enabled: bool = False) -> None:
+    def __init__(
+        self,
+        memory_manager: MemoryManager | None = None,
+        llm_planner_enabled: bool = False,
+        scheduler_service: SchedulerService | None = None,
+    ) -> None:
         self.memory_manager = memory_manager or MemoryManager()
+        self.scheduler_service = scheduler_service or SchedulerService(state_dir=self.memory_manager.state_dir)
         self.planner = Planner(llm_enabled=llm_planner_enabled)
         self.executor = Executor()
+        self.registry = SkillRegistry()
+        self.registry.register(RemindersCreateSkill(self.scheduler_service, str(self.memory_manager.state_dir)))
+        self.registry.register(BriefingsDailySkill(str(self.memory_manager.state_dir)))
 
     def handle(self, request: ChatRequest) -> OrchestrationResult:
         trace = Trace(task=request.message)
