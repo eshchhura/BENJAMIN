@@ -1,5 +1,7 @@
 from functools import lru_cache
 
+from core.approvals.service import ApprovalService
+from core.approvals.store import ApprovalStore
 from core.memory.manager import MemoryManager
 from core.notifications.notifier import NotificationRouter, build_notification_router
 from core.orchestration.orchestrator import Orchestrator
@@ -24,3 +26,13 @@ def get_scheduler_service() -> SchedulerService:
 @lru_cache(maxsize=1)
 def get_notification_router() -> NotificationRouter:
     return build_notification_router()
+
+
+@lru_cache(maxsize=1)
+def get_approval_store() -> ApprovalStore:
+    return ApprovalStore(state_dir=get_memory_manager().state_dir)
+
+
+@lru_cache(maxsize=1)
+def get_approval_service() -> ApprovalService:
+    return ApprovalService(store=get_approval_store(), memory_manager=get_memory_manager())

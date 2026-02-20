@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from .deps import get_scheduler_service
+from .routes_approvals import router as approvals_router
 from .routes_chat import router as chat_router
 from .routes_jobs import router as jobs_router
 from .routes_memory import router as memory_router
@@ -11,6 +12,7 @@ app.include_router(chat_router, prefix="/chat", tags=["chat"])
 app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
 app.include_router(memory_router, prefix="/memory", tags=["memory"])
 app.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
+app.include_router(approvals_router, prefix="/approvals", tags=["approvals"])
 
 
 @app.on_event("startup")
