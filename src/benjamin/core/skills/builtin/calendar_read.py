@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 
+from benjamin.core.infra.breaker_manager import ServiceDegradedError
+
 from benjamin.core.integrations.base import CalendarConnector
 from benjamin.core.retrieval.helper import RetrievalHelper
 from benjamin.core.skills.base import SkillResult
@@ -44,13 +46,17 @@ class CalendarSearchSkill:
         if query_text and ":" not in query_text:
             query_text = self.retrieval_helper.rewrite_query(payload.query or "", target="calendar")
 
-        events = self.connector.search_events(
-            calendar_id=payload.calendar_id or os.getenv("BENJAMIN_CALENDAR_ID", "primary"),
-            time_min_iso=now.isoformat(),
-            time_max_iso=window_end.isoformat(),
-            query=query_text,
-            max_results=payload.max_results,
-        )
+        try:
+            events = self.connector.search_events(
+                calendar_id=payload.calendar_id or os.getenv("BENJAMIN_CALENDAR_ID", "primary"),
+                time_min_iso=now.isoformat(),
+                time_max_iso=window_end.isoformat(),
+                query=query_text,
+                max_results=payload.max_results,
+            )
+        except ServiceDegradedError:
+            return SkillResult(content=json.dumps({"events": [], "reason": "service_degraded:calendar"}))
+
         normalized = [
             {
                 "title": event.get("title", ""),

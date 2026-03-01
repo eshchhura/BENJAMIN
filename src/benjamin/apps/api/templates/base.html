@@ -22,10 +22,39 @@
         </form>
       </nav>
     </header>
+    <div id="breaker-banner" style="display:none;padding:0.75rem 1rem;background:#fff4e5;border:1px solid #f59e0b;margin:1rem;color:#7c2d12;font-weight:600;"></div>
     <main>
       {% block content %}{% endblock %}
     </main>
     <script>
+      async function refreshBreakerBanner() {
+        try {
+          const response = await fetch("/integrations/status", { credentials: "same-origin" });
+          if (!response.ok) {
+            return;
+          }
+          const payload = await response.json();
+          const breakers = payload.breakers || {};
+          const degraded = Object.entries(breakers)
+            .filter(([, data]) => data && data.state === "open")
+            .map(([name]) => `${name} (open)`);
+          const banner = document.getElementById("breaker-banner");
+          if (!banner) {
+            return;
+          }
+          if (degraded.length === 0) {
+            banner.style.display = "none";
+            banner.textContent = "";
+            return;
+          }
+          banner.style.display = "block";
+          banner.textContent = `Degraded services: ${degraded.join(", ")}. See /integrations/status`;
+        } catch (_error) {
+          // no-op
+        }
+      }
+      refreshBreakerBanner();
+
       document.body.addEventListener("htmx:configRequest", function (event) {
         const tokenCookie = document.cookie
           .split(";")

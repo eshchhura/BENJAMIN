@@ -8,6 +8,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from benjamin.core.integrations.base import CalendarConnector, EmailConnector
+from benjamin.core.infra.breaker_manager import ServiceDegradedError
 from benjamin.core.ledger.keys import job_run_key
 from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.logging.context import log_context
@@ -111,15 +112,20 @@ def run_daily_briefing(
 
     sections: list[str] = []
     section_map: dict[str, str] = {}
+    degraded_services: list[str] = []
 
     if calendar_connector is not None:
-        schedule = calendar_connector.search_events(
-            calendar_id=os.getenv("BENJAMIN_CALENDAR_ID", "primary"),
-            time_min_iso=now.isoformat(),
-            time_max_iso=(now + timedelta(hours=12)).isoformat(),
-            query=None,
-            max_results=5,
-        )
+        try:
+            schedule = calendar_connector.search_events(
+                calendar_id=os.getenv("BENJAMIN_CALENDAR_ID", "primary"),
+                time_min_iso=now.isoformat(),
+                time_max_iso=(now + timedelta(hours=12)).isoformat(),
+                query=None,
+                max_results=5,
+            )
+        except ServiceDegradedError:
+            degraded_services.append("calendar")
+            schedule = []
         if schedule:
             sections.extend(["Today's schedule:"])
             schedule_lines = []
@@ -135,12 +141,20 @@ def run_daily_briefing(
             "BENJAMIN_GMAIL_QUERY_IMPORTANT",
             "newer_than:1d -category:social -category:promotions",
         )
-        messages = email_connector.search_messages(query=query, max_results=5)
+        try:
+            messages = email_connector.search_messages(query=query, max_results=5)
+        except ServiceDegradedError:
+            degraded_services.append("gmail")
+            messages = []
         if messages:
             sections.extend(["Important emails:"])
             email_lines = []
             for msg in messages[:5]:
-                summary = email_connector.thread_summary(msg.get("thread_id", ""), max_messages=3)
+                try:
+                    summary = email_connector.thread_summary(msg.get("thread_id", ""), max_messages=3)
+                except ServiceDegradedError:
+                    degraded_services.append("gmail")
+                    summary = {"snippets": []}
                 snippets = summary.get("snippets", [])
                 snippet = snippets[0] if snippets else msg.get("snippet", "")
                 line = f"- {msg.get('subject', '(no subject)')} — {snippet}"
@@ -162,6 +176,9 @@ def run_daily_briefing(
     )
     section_map["recent_episodes"] = "\n".join(event_lines)
     section_map["preferences"] = "\n".join(preference_lines)
+    if degraded_services:
+        sections.insert(0, "Email/Calendar currently degraded; showing memory-only sections")
+        sections.insert(1, "")
     body = "\n".join(sections)
 
     summarizer = Summarizer()
@@ -210,6 +227,7 @@ def run_daily_briefing(
                     },
                     "calendar_included": calendar_connector is not None,
                     "gmail_included": email_connector is not None,
+                    "degraded_services": sorted(set(degraded_services)),
                 },
             )
             ledger.mark(key, "succeeded")

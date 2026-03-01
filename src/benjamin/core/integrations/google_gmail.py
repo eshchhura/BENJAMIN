@@ -5,48 +5,55 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
 
+from benjamin.core.infra.breaker_manager import BreakerManager
 from benjamin.core.integrations.google_auth import build_google_service
 
 
 class GoogleGmailConnector:
-    def __init__(self, token_path: str) -> None:
+    def __init__(self, token_path: str, breaker_manager: BreakerManager | None = None) -> None:
         self.service = build_google_service("gmail", "v1", token_path)
+        self.breaker_manager = breaker_manager
 
     def search_messages(self, query: str, max_results: int) -> list[dict]:
-        response = self.service.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
-        out: list[dict] = []
-        for item in response.get("messages", []):
-            out.append(self._normalize_message(item["id"]))
-        return out
+        def _call() -> list[dict]:
+            response = self.service.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
+            out: list[dict] = []
+            for item in response.get("messages", []):
+                out.append(self._normalize_message(item["id"]))
+            return out
+
+        return self._guarded(_call)
 
     def read_message(self, message_id: str) -> dict:
-        return self._normalize_message(message_id, include_body=True)
+        return self._guarded(lambda: self._normalize_message(message_id, include_body=True))
 
     def thread_summary(self, thread_id: str, max_messages: int = 10) -> dict:
-        thread = self.service.users().threads().get(userId="me", id=thread_id, format="metadata").execute()
-        messages = thread.get("messages", [])[:max_messages]
-        participants: set[str] = set()
-        snippets: list[str] = []
-        subject = ""
-        for msg in messages:
-            headers = self._headers_map(msg.get("payload", {}).get("headers", []))
-            if headers.get("From"):
-                participants.add(headers["From"])
-            if headers.get("To"):
-                participants.add(headers["To"])
-            if not subject:
-                subject = headers.get("Subject", "")
-            snippet = msg.get("snippet")
-            if snippet:
-                snippets.append(snippet)
+        def _call() -> dict:
+            thread = self.service.users().threads().get(userId="me", id=thread_id, format="metadata").execute()
+            messages = thread.get("messages", [])[:max_messages]
+            participants: set[str] = set()
+            snippets: list[str] = []
+            subject = ""
+            for msg in messages:
+                headers = self._headers_map(msg.get("payload", {}).get("headers", []))
+                if headers.get("From"):
+                    participants.add(headers["From"])
+                if headers.get("To"):
+                    participants.add(headers["To"])
+                if not subject:
+                    subject = headers.get("Subject", "")
+                snippet = msg.get("snippet")
+                if snippet:
+                    snippets.append(snippet)
 
-        return {
-            "thread_id": thread_id,
-            "subject": subject,
-            "participants": sorted(participants),
-            "snippets": snippets,
-        }
+            return {
+                "thread_id": thread_id,
+                "subject": subject,
+                "participants": sorted(participants),
+                "snippets": snippets,
+            }
 
+        return self._guarded(_call)
 
     def create_draft(
         self,
@@ -56,34 +63,41 @@ class GoogleGmailConnector:
         subject: str,
         body: str,
     ) -> dict:
-        message = EmailMessage()
-        message["To"] = ", ".join(to)
-        if cc:
-            message["Cc"] = ", ".join(cc)
-        if bcc:
-            message["Bcc"] = ", ".join(bcc)
-        message["Subject"] = subject
-        message.set_content(body)
+        def _call() -> dict:
+            message = EmailMessage()
+            message["To"] = ", ".join(to)
+            if cc:
+                message["Cc"] = ", ".join(cc)
+            if bcc:
+                message["Bcc"] = ", ".join(bcc)
+            message["Subject"] = subject
+            message.set_content(body)
 
-        encoded = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-        try:
+            encoded = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
             response = (
                 self.service.users()
                 .drafts()
                 .create(userId="me", body={"message": {"raw": encoded}})
                 .execute()
             )
-        except Exception as exc:  # pragma: no cover - depends on external client exception class
+            draft = response.get("message", {})
+            snippet = draft.get("snippet") or body[:200]
+            return {
+                "draft_id": response.get("id") or draft.get("id"),
+                "subject": subject,
+                "to": to,
+                "snippet": snippet,
+            }
+
+        try:
+            return self._guarded(_call)
+        except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"google_gmail_create_draft_failed: {exc}") from exc
 
-        draft = response.get("message", {})
-        snippet = draft.get("snippet") or body[:200]
-        return {
-            "draft_id": response.get("id") or draft.get("id"),
-            "subject": subject,
-            "to": to,
-            "snippet": snippet,
-        }
+    def _guarded(self, fn):
+        if self.breaker_manager is None:
+            return fn()
+        return self.breaker_manager.wrap("gmail", fn)
 
     def _normalize_message(self, message_id: str, include_body: bool = False) -> dict:
         format_kind = "full" if include_body else "metadata"

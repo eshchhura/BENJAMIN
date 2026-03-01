@@ -4,6 +4,8 @@ import json
 
 from pydantic import BaseModel
 
+from benjamin.core.infra.breaker_manager import ServiceDegradedError
+
 from benjamin.core.integrations.base import EmailConnector
 from benjamin.core.retrieval.helper import RetrievalHelper
 from benjamin.core.skills.base import SkillResult
@@ -41,7 +43,10 @@ class GmailSearchSkill:
         if ":" not in payload.query and " label:" not in payload.query:
             rewritten_query = self.retrieval_helper.rewrite_query(payload.query, target="gmail")
 
-        messages = self.connector.search_messages(query=rewritten_query, max_results=payload.max_results)
+        try:
+            messages = self.connector.search_messages(query=rewritten_query, max_results=payload.max_results)
+        except ServiceDegradedError:
+            return SkillResult(content=json.dumps({"messages": [], "reason": "service_degraded:gmail"}))
         normalized = [
             {
                 "from": item.get("from", ""),
@@ -68,7 +73,10 @@ class GmailReadMessageSkill:
         if self.connector is None:
             return SkillResult(content=json.dumps({"message_id": payload.message_id, "reason": "gmail_integration_unavailable"}))
 
-        message = self.connector.read_message(payload.message_id)
+        try:
+            message = self.connector.read_message(payload.message_id)
+        except ServiceDegradedError:
+            return SkillResult(content=json.dumps({"message_id": payload.message_id, "reason": "service_degraded:gmail"}))
         return SkillResult(
             content=json.dumps(
                 {
@@ -104,7 +112,10 @@ class GmailThreadSummarySkill:
                 )
             )
 
-        summary = self.connector.thread_summary(payload.thread_id, max_messages=payload.max_messages)
+        try:
+            summary = self.connector.thread_summary(payload.thread_id, max_messages=payload.max_messages)
+        except ServiceDegradedError:
+            return SkillResult(content=json.dumps({"thread_id": payload.thread_id, "subject": "", "participants": [], "snippets": [], "reason": "service_degraded:gmail"}))
         snippets = summary.get("snippets", [])
         bullets = self.summarizer.summarize_bullets("\n".join(snippets), max_bullets=6) if snippets else snippets
         return SkillResult(

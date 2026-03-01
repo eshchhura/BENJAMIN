@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from benjamin.core.http.client import request_with_retry
+from benjamin.core.net.http import request_json
 
 
 class OpenAICompatClient:
@@ -29,15 +29,12 @@ class OpenAICompatClient:
         if response_format is not None:
             payload["response_format"] = response_format
 
-        response = request_with_retry(
+        data = request_json(
             "POST",
             self.url,
             json=payload,
-            timeout_override=self.timeout_s,
-            retries=1,
-            redact_url=True,
+            timeout_s=self.timeout_s,
         )
-        data = response.json()
         choices = data.get("choices") or []
         if not choices:
             return ""

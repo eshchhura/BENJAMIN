@@ -4,6 +4,7 @@ import json
 
 from pydantic import BaseModel, Field
 
+from benjamin.core.infra.breaker_manager import ServiceDegradedError
 from benjamin.core.integrations.base import EmailConnector
 from benjamin.core.skills.base import SkillResult
 
@@ -28,13 +29,16 @@ class GmailDraftEmailSkill:
         if self.connector is None:
             raise RuntimeError("gmail_integration_unavailable")
 
-        draft = self.connector.create_draft(
-            to=payload.to,
-            cc=payload.cc,
-            bcc=payload.bcc,
-            subject=payload.subject,
-            body=payload.body,
-        )
+        try:
+            draft = self.connector.create_draft(
+                to=payload.to,
+                cc=payload.cc,
+                bcc=payload.bcc,
+                subject=payload.subject,
+                body=payload.body,
+            )
+        except ServiceDegradedError:
+            return SkillResult(content=json.dumps({"reason": "service_degraded:gmail"}))
         return SkillResult(
             content=json.dumps(
                 {
