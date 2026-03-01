@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from benjamin.core.approvals.service import ApprovalService
 from benjamin.core.approvals.store import ApprovalStore
@@ -37,11 +38,12 @@ def run_rules_evaluation(
         calendar_connector=calendar_connector,
     )
 
+    run_correlation_id = str(uuid4())
     results: list[RuleRunResult] = []
     for rule in rule_store.list_all():
         if not rule.enabled:
             continue
-        result = rule_engine.evaluate_rule(rule)
+        result = rule_engine.evaluate_rule(rule, ctx={"correlation_id": run_correlation_id})
         rule_store.upsert(rule)
         results.append(result)
     return results

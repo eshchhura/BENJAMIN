@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from uuid import uuid4
 
 from benjamin.core.integrations.base import CalendarConnector, EmailConnector
 from benjamin.core.memory.manager import MemoryManager
@@ -33,14 +34,18 @@ def run_reminder(
     job_id: str | None = None,
     router: NotificationRouter | None = None,
 ) -> None:
+    correlation_id = str(uuid4())
     active_router = router or build_notification_router()
-    active_router.send(title="Reminder", body=message, meta={"job_id": job_id} if job_id else {})
+    notify_meta = {"correlation_id": correlation_id}
+    if job_id:
+        notify_meta["job_id"] = job_id
+    active_router.send(title="Reminder", body=message, meta=notify_meta)
 
     memory = _memory_manager_for_state(state_dir)
     memory.episodic.append(
         kind="notification",
         summary=f"Sent reminder: {message}",
-        meta={"job_id": job_id} if job_id else {},
+        meta=notify_meta,
     )
 
 
@@ -106,14 +111,19 @@ def run_daily_briefing(
     )
     body = "\n".join(sections)
 
+    correlation_id = str(uuid4())
     active_router = router or build_notification_router()
-    active_router.send(title="Daily Briefing", body=body, meta={"job_id": job_id} if job_id else {})
+    notify_meta = {"correlation_id": correlation_id}
+    if job_id:
+        notify_meta["job_id"] = job_id
+    active_router.send(title="Daily Briefing", body=body, meta=notify_meta)
 
     memory.episodic.append(
         kind="briefing",
         summary="Sent daily briefing",
         meta={
             "job_id": job_id,
+            "correlation_id": correlation_id,
             "items": {
                 "recent_events": [event.summary for event in recent_events],
                 "preferences": [f"{fact.key}:{fact.value}" for fact in preferences],

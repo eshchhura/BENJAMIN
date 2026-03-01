@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 from typing import Any
 
 from benjamin.core.approvals.service import ApprovalService
@@ -30,7 +31,7 @@ class RuleEngine:
         self.calendar_connector = calendar_connector
 
     def evaluate_rule(self, rule: Rule, ctx: dict | None = None) -> RuleRunResult:
-        del ctx
+        correlation_id = str((ctx or {}).get("correlation_id") or uuid4())
         notes: list[str] = []
         state = rule.state
         now = datetime.now(timezone.utc)
@@ -64,7 +65,7 @@ class RuleEngine:
                             matching_items=matching_items,
                             now_iso=now.isoformat(),
                         )
-                        self.notifier.send(title=action.title, body=body, meta={"rule_id": rule.id})
+                        self.notifier.send(title=action.title, body=body, meta={"rule_id": rule.id, "correlation_id": correlation_id})
                         notes.append("notify_sent")
                         executed_actions += 1
                     elif isinstance(action, RuleActionProposeStep):
@@ -77,7 +78,7 @@ class RuleEngine:
                         self.approval_service.create_pending(
                             step=step,
                             ctx=ContextPack(goal=f"Rule matched: {rule.name}", cwd=None),
-                            requester={"source": "rule", "rule_id": rule.id},
+                            requester={"source": "rule", "rule_id": rule.id, "correlation_id": correlation_id},
                             rationale=action.rationale,
                             registry=self.registry,
                         )
@@ -94,7 +95,7 @@ class RuleEngine:
             self.memory_manager.episodic.append(
                 kind="rule",
                 summary=f"Ran rule {rule.name}: matched={matched} count={match_count}",
-                meta={"rule_id": rule.id, "trigger_type": rule.trigger.type},
+                meta={"rule_id": rule.id, "trigger_type": rule.trigger.type, "correlation_id": correlation_id},
             )
             return RuleRunResult(rule_id=rule.id, ok=True, matched=matched, match_count=match_count, notes=notes)
         except Exception as exc:
@@ -102,7 +103,7 @@ class RuleEngine:
             self.memory_manager.episodic.append(
                 kind="rule",
                 summary=f"Rule {rule.name} failed",
-                meta={"rule_id": rule.id, "error": str(exc)},
+                meta={"rule_id": rule.id, "error": str(exc), "correlation_id": correlation_id},
             )
             return RuleRunResult(rule_id=rule.id, ok=False, matched=False, match_count=0, notes=notes, error=str(exc))
 

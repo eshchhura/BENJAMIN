@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Run History</h2>
+
+<section>
+  <h3>Recent Chats</h3>
+  {% if tasks %}
+    <ul>
+      {% for task in tasks %}
+      <li>
+        <a href="/ui/runs/chat/{{ task.task_id }}">{{ task.task_id }}</a>
+        — {{ task.ts_iso }} — {{ task.user_message }}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No chat runs yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Recent Rule Runs</h3>
+  {% if rule_runs %}
+    <ul>
+      {% for run in rule_runs %}
+      <li>
+        {% if run.meta.get("rule_id") %}
+        <a href="/ui/runs/rules/{{ run.meta.get('rule_id') }}">{{ run.meta.get("rule_id") }}</a>
+        {% else %}
+        (unknown rule)
+        {% endif %}
+        — {{ run.ts_iso }} — {{ run.summary }}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No rule runs yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Recent Job Runs</h3>
+  {% if job_runs %}
+    <ul>
+      {% for run in job_runs %}
+      <li>{{ run.ts_iso }} — {{ run.kind }} — {{ run.summary }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No job runs yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Recent Approval Audits</h3>
+  {% if approval_audits %}
+    <ul>
+      {% for run in approval_audits %}
+      <li>
+        {% if run.meta.get("approval_id") %}
+          <a href="/ui/runs/approvals/{{ run.meta.get('approval_id') }}">{{ run.meta.get("approval_id") }}</a>
+        {% else %}
+          (no approval id)
+        {% endif %}
+        — {{ run.ts_iso }} — {{ run.summary }}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No approval audit runs yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

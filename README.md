@@ -47,7 +47,8 @@ benjamin-worker
 
 ## Configuration
 
-- `BENJAMIN_STATE_DIR`: directory for persisted state (`semantic.jsonl`, `episodic.jsonl`, `jobs.sqlite`).
+- `BENJAMIN_STATE_DIR`: directory for persisted state (`semantic.jsonl`, `episodic.jsonl`, `tasks.jsonl`, `jobs.sqlite`).
+- `BENJAMIN_TASKS_MAX`: max retained chat task run records in `tasks.jsonl` (default `500`).
 - `BENJAMIN_MEMORY_AUTOWRITE`: automatic memory write policy switch (`on`/`off`, default `on`).
 - `BENJAMIN_NOTIFIER`: enabled channels (`console`, `discord`, or comma-separated like `console,discord`; default `console`).
 - `BENJAMIN_DISCORD_WEBHOOK_URL`: Discord webhook URL (required when `discord` notifier is enabled).
@@ -186,4 +187,10 @@ curl -X POST "http://localhost:8000/rules/<RULE_ID>/reset-state" \
 
 ## Command Center UI
 
-Open `http://localhost:8000/ui` to use the web UI for chat, approvals, jobs, rules, and memory management.
+Open `http://localhost:8000/ui` to use the web UI for chat, approvals, jobs, rules, memory management, and run history.
+
+Run history dashboard and drilldowns:
+- `/ui/runs`: recent chat tasks, rule runs, job runs, and approval audits.
+- `/ui/runs/chat/{task_id}`: full plan/steps/trace for a chat run.
+- `/ui/runs/rules/{rule_id}`: rule definition plus recent episodes.
+- `/ui/runs/approvals/{approval_id}`: approval record detail.

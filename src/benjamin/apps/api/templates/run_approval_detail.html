@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Approval Detail</h2>
+<p><strong>Approval ID:</strong> {{ record.id }}</p>
+<p><strong>Status:</strong> {{ record.status }}</p>
+<p><strong>Correlation ID:</strong> {{ record.requester.get("correlation_id", "") }}</p>
+
+<h3>Approval JSON</h3>
+<pre>{{ record_json }}</pre>
+{% endblock %}

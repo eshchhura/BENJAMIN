@@ -28,12 +28,15 @@ class ApprovalService:
 
         created_at = datetime.now(timezone.utc)
         ttl_hours = int(os.getenv("BENJAMIN_APPROVALS_TTL_HOURS", "72"))
+        correlation_id = str(requester.get("correlation_id") or uuid4())
+        enriched_requester = dict(requester)
+        enriched_requester.setdefault("correlation_id", correlation_id)
         record = PendingApproval(
             id=str(uuid4()),
             created_at_iso=created_at.isoformat(),
             expires_at_iso=(created_at + timedelta(hours=ttl_hours)).isoformat(),
             status="pending",
-            requester=requester,
+            requester=enriched_requester,
             step=step,
             context={"cwd": ctx.cwd, "goal": ctx.goal},
             rationale=rationale,
@@ -58,6 +61,7 @@ class ApprovalService:
             self._persist_or_clean(record)
             raise HTTPException(status_code=400, detail="approval expired")
 
+        correlation_id = str(uuid4())
         context = ContextPack(goal=record.context.get("goal", "approved execution"), cwd=record.context.get("cwd"))
         result = executor.execute_plan(
             Plan(goal=context.goal, steps=[record.step]),
@@ -65,7 +69,7 @@ class ApprovalService:
             registry=registry,
             trace=None,
             approval_service=self,
-            requester={"source": "approval", "approval_id": record.id, "approver_note": approver_note},
+            requester={"source": "approval", "approval_id": record.id, "approver_note": approver_note, "correlation_id": correlation_id},
             force_execute_writes=True,
         )[0]
         record.status = "approved"
@@ -74,8 +78,9 @@ class ApprovalService:
         self.memory_manager.episodic.append(
             kind="approval",
             summary=f"Approved and executed {record.step.skill_name}",
-            meta={"approval_id": record.id, "step_id": record.step.id, "ok": result.ok, "approver_note": approver_note},
+            meta={"approval_id": record.id, "step_id": record.step.id, "ok": result.ok, "approver_note": approver_note, "correlation_id": correlation_id},
         )
+        record.requester = {**record.requester, "correlation_id": correlation_id}
         self._persist_or_clean(record)
         return record
 
@@ -93,13 +98,15 @@ class ApprovalService:
             self._persist_or_clean(record)
             raise HTTPException(status_code=400, detail="approval expired")
 
+        correlation_id = str(uuid4())
         record.status = "rejected"
         record.error = reason
         self.memory_manager.episodic.append(
             kind="approval",
             summary=f"Rejected {record.step.skill_name}",
-            meta={"approval_id": record.id, "reason": reason},
+            meta={"approval_id": record.id, "reason": reason, "correlation_id": correlation_id},
         )
+        record.requester = {**record.requester, "correlation_id": correlation_id}
         self._persist_or_clean(record)
         return record
 
