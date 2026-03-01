@@ -27,6 +27,8 @@ async def create_rule(
     contains: str | None = Form(default=None),
     action_title: str | None = Form(default=None),
     action_body_template: str | None = Form(default=None),
+    cooldown_minutes: int = Form(default=0),
+    max_actions_per_run: int = Form(default=3),
 ) -> Rule:
     store = _store_from_request(request)
     content_type = request.headers.get("content-type", "")
@@ -49,6 +51,8 @@ async def create_rule(
                 body_template=action_body_template or "Rule {{count}} matched at {{now_iso}}",
             )
         ],
+        cooldown_minutes=max(0, cooldown_minutes),
+        max_actions_per_run=max(1, max_actions_per_run),
     )
     return store.upsert(rule)
 
@@ -86,6 +90,25 @@ def delete_rule(rule_id: str, request: Request) -> dict[str, str]:
         raise HTTPException(status_code=404, detail="rule not found")
     return {"status": "deleted", "rule_id": rule_id}
 
+
+
+
+@router.post("/{rule_id}/reset-state", response_model=Rule)
+def reset_rule_state(rule_id: str, request: Request) -> Rule:
+    store = _store_from_request(request)
+    existing = store.get(rule_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+    reset_state = existing.state.model_copy(
+        update={
+            "last_run_iso": None,
+            "last_match_iso": None,
+            "cooldown_until_iso": None,
+            "seen_ids": [],
+            "last_cursor_iso": None,
+        }
+    )
+    return store.upsert(existing.model_copy(update={"state": reset_state, "last_run_iso": None, "last_match_iso": None}))
 
 @router.post("/evaluate-now")
 def evaluate_now(request: Request) -> dict[str, list[dict]]:

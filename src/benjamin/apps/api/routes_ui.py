@@ -99,6 +99,8 @@ def ui_create_rule(
     contains: str = Form(default=""),
     action_title: str = Form(...),
     action_body_template: str = Form(default="Rule matched {{count}} items. Top={{top1}} at {{now_iso}}"),
+    cooldown_minutes: int = Form(default=0),
+    max_actions_per_run: int = Form(default=3),
 ):
     from benjamin.core.rules.schemas import Rule, RuleActionNotify, RuleCondition, RuleTrigger
 
@@ -108,6 +110,8 @@ def ui_create_rule(
             trigger=RuleTrigger(type=trigger_type),
             condition=RuleCondition(contains=contains or None),
             actions=[RuleActionNotify(type="notify", title=action_title, body_template=action_body_template)],
+            cooldown_minutes=max(0, cooldown_minutes),
+            max_actions_per_run=max(1, max_actions_per_run),
         )
     )
     return RedirectResponse(url="/ui/rules", status_code=303)
@@ -130,6 +134,26 @@ def ui_delete_rule(request: Request, rule_id: str):
     request.app.state.rule_store.delete(rule_id)
     return RedirectResponse(url="/ui/rules", status_code=303)
 
+
+
+
+@router.post("/rules/{rule_id}/reset-state")
+def ui_reset_rule_state(request: Request, rule_id: str):
+    rule = request.app.state.rule_store.get(rule_id)
+    if rule is not None:
+        reset_state = rule.state.model_copy(
+            update={
+                "last_run_iso": None,
+                "last_match_iso": None,
+                "cooldown_until_iso": None,
+                "seen_ids": [],
+                "last_cursor_iso": None,
+            }
+        )
+        request.app.state.rule_store.upsert(
+            rule.model_copy(update={"state": reset_state, "last_run_iso": None, "last_match_iso": None})
+        )
+    return RedirectResponse(url="/ui/rules", status_code=303)
 
 @router.post("/rules/evaluate-now")
 def ui_rules_eval(request: Request):
