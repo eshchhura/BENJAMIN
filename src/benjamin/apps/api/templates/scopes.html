@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Security Scopes</h2>
+
+{% if not snapshot.overrides_enabled %}
+<p><strong>Read-only (env controlled)</strong>. Set <code>BENJAMIN_POLICY_OVERRIDES=on</code> to edit from UI/API.</p>
+{% endif %}
+
+<p>Scope mode: <code>{{ snapshot.mode }}</code></p>
+
+<form method="post" action="/ui/scopes/save">
+  <h3>Enabled Scopes</h3>
+  <table>
+    <thead><tr><th>Scope</th><th>Enabled</th></tr></thead>
+    <tbody>
+      {% for scope in all_scopes %}
+      <tr>
+        <td><code>{{ scope }}</code></td>
+        <td><input type="checkbox" name="scopes_enabled" value="{{ scope }}" {% if scope in enabled_set %}checked{% endif %} {% if not snapshot.overrides_enabled %}disabled{% endif %}></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 id="rules-allowlist">Rules global allowed scopes</h3>
+  <p>Rule <code>propose_step</code> actions are limited to this allowlist.</p>
+  {% for scope in all_scopes %}
+  <label style="display:block;">
+    <input type="checkbox" name="rules_allowed_scopes" value="{{ scope }}" {% if scope in rules_set %}checked{% endif %} {% if not snapshot.overrides_enabled %}disabled{% endif %}>
+    <code>{{ scope }}</code>
+  </label>
+  {% endfor %}
+
+  {% if snapshot.overrides_enabled %}
+  <button type="submit">Save overrides</button>
+  {% endif %}
+</form>
+{% endblock %}

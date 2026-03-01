@@ -24,6 +24,16 @@
 <p>None</p>
 {% endif %}
 
+<h3>Policy snapshots</h3>
+<p><strong>At creation:</strong> <code>{{ record.policy_snapshot }}</code></p>
+<p><strong>At approve attempt:</strong> <code>{{ record.policy_snapshot_at_approve }}</code></p>
+<p>
+  <strong>Diff summary:</strong>
+  enabled added={{ policy_diff.enabled_added }},
+  enabled removed={{ policy_diff.enabled_removed }},
+  rules_allowlist_changed={{ policy_diff.rules_allowlist_changed }}
+</p>
+
 <h3>Ledger Timeline</h3>
 {% if timeline %}
 <ul>

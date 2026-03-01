@@ -144,11 +144,24 @@ class Orchestrator:
                 for result in step_results
                 if result.error and result.error.startswith("approval_required:")
             ]
+            policy_errors = [result for result in step_results if result.error and result.error.startswith("policy_denied:")]
             if approval_errors:
                 approval_id = approval_errors[0].split(":", 1)[1]
                 final_response = (
                     f"Approval required to proceed. Approval ID: {approval_id}. "
                     "Use GET /approvals and POST /approvals/{id}/approve to continue."
+                )
+            elif policy_errors:
+                blocked = []
+                for step, step_result in zip(plan.steps, step_results):
+                    if not (step_result.error or "").startswith("policy_denied:"):
+                        continue
+                    disabled = step_result.error.split(":", 1)[1]
+                    blocked.append(f"{step.skill_name} requires [{disabled}]")
+                joined = "; ".join(blocked)
+                final_response = (
+                    f"Policy denied. Blocked skills: {joined}. "
+                    "Remediation: go to /ui/scopes or call POST /v1/security/scopes/enable with the required scopes."
                 )
             else:
                 final_response = outputs[-1] if outputs else ""

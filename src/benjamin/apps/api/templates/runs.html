@@ -6,7 +6,7 @@
   <label>
     Kind
     <select name="kind">
-      {% for value in ["all", "chat", "rule", "job", "approval"] %}
+      {% for value in ["all", "chat", "rule", "job", "approval", "policy"] %}
       <option value="{{ value }}" {% if kind == value %}selected{% endif %}>{{ value }}</option>
       {% endfor %}
     </select>
@@ -110,6 +110,25 @@
     </ul>
   {% else %}
     <p>No approval audit runs.</p>
+  {% endif %}
+</section>
+
+
+<section>
+  <h3>Policy Audits</h3>
+  {% if policy_audits %}
+    <ul>
+      {% for run in policy_audits %}
+      <li>
+        {{ run.ts_iso }} — {{ run.summary }}
+        {% if run.meta.get("correlation_id") %}
+        — correlation: <a href="/ui/correlation/{{ run.meta.get('correlation_id') }}">{{ run.meta.get("correlation_id") }}</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No policy audit runs.</p>
   {% endif %}
 </section>
 

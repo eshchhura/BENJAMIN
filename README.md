@@ -73,6 +73,7 @@ benjamin-worker
 - `BENJAMIN_SCOPE_MODE`: permissions scope mode (`default`/`allowlist`, default `default`).
 - `BENJAMIN_SCOPES_ENABLED`: comma-separated scope list used as write allowlist in `default` mode or strict allowlist in `allowlist` mode.
 - `BENJAMIN_RULES_ALLOWED_SCOPES`: comma-separated scope list rules are allowed to propose (default `reminders.write`).
+- `BENJAMIN_POLICY_OVERRIDES`: when `on` (default), UI/API policy changes are stored in `<BENJAMIN_STATE_DIR>/policy_overrides.json`; when `off`, scopes are read-only from env.
 - `BENJAMIN_AUTH_MODE`: API/UI auth mode (`off`/`token`, default `token`).
 - `BENJAMIN_AUTH_TOKEN`: required shared token when `BENJAMIN_AUTH_MODE=token`.
 - `BENJAMIN_EXPOSE_PUBLIC`: when `on`, `/chat` POST also requires auth token (default `off`).
@@ -122,6 +123,32 @@ export BENJAMIN_SCOPE_MODE=default
 export BENJAMIN_SCOPES_ENABLED="calendar.write,gmail.draft"
 # Deliberately omit gmail.send
 ```
+
+Overrides & management:
+
+- Open `/ui/scopes` for interactive toggles.
+- API reads current snapshot at `GET /v1/security/scopes`.
+- API writes mutate only `<BENJAMIN_STATE_DIR>/policy_overrides.json` (env is unchanged).
+
+```bash
+# Enable scopes
+curl -X POST "http://localhost:8000/v1/security/scopes/enable"   -H "Content-Type: application/json"   -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"   -d '{"scopes":["calendar.write","gmail.draft"]}'
+
+# Disable scope
+curl -X POST "http://localhost:8000/v1/security/scopes/disable"   -H "Content-Type: application/json"   -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"   -d '{"scopes":["gmail.draft"]}'
+
+# Set rules propose_step allowlist
+curl -X POST "http://localhost:8000/v1/security/rules/allowed-scopes"   -H "Content-Type: application/json"   -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"   -d '{"scopes":["reminders.write","calendar.write"]}'
+
+# Reset rules allowlist to defaults
+curl -X POST "http://localhost:8000/v1/security/rules/allowed-scopes/reset"   -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"
+```
+
+Policy telemetry:
+
+- Policy allow/deny decisions are written to episodic memory with `kind="policy"`.
+- View them in `/ui/runs` (kind filter `policy`) and in `/ui/correlation/{correlation_id}`.
+
 
 ## Memory API examples
 

@@ -30,6 +30,7 @@ from .routes_integrations import router as integrations_router
 from .routes_jobs import router as jobs_router
 from .routes_memory import router as memory_router
 from .routes_rules import router as rules_router
+from .routes_security import router as security_router
 from .routes_tasks import router as tasks_router
 from .routes_ui import router as ui_router
 from benjamin.core.cache.ttl import TTLCache
@@ -125,6 +126,7 @@ app.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
 app.include_router(integrations_router, prefix="/integrations", tags=["integrations"])
 app.include_router(approvals_router, prefix="/approvals", tags=["approvals"])
 app.include_router(rules_router, prefix="/rules", tags=["rules"])
+app.include_router(security_router, prefix="/v1/security", tags=["security"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
 
 
@@ -155,7 +157,7 @@ async def auth_middleware(request, call_next):
             return await call_next(request)
         return RedirectResponse(url="/ui/login", status_code=302)
 
-    protected_prefixes = ("/approvals", "/jobs", "/rules", "/memory")
+    protected_prefixes = ("/approvals", "/jobs", "/rules", "/memory", "/v1/security")
     if method in {"POST", "PUT", "PATCH", "DELETE"} and path.startswith(protected_prefixes):
         if not is_request_authenticated(request):
             return JSONResponse(status_code=401, content={"detail": "unauthorized"})
@@ -210,7 +212,7 @@ def shutdown() -> None:
 
 @app.get("/runs/search")
 def runs_search(q: str = Query(default=""), limit: int = Query(default=50), kind: str = Query(default="all"), status: str = Query(default="all")) -> dict:
-    normalized_kind = kind if kind in {"chat", "rule", "job", "approval", "all"} else "all"
+    normalized_kind = kind if kind in {"chat", "rule", "job", "approval", "policy", "all"} else "all"
     normalized_status = status if status in {"ok", "failed", "skipped", "all"} else "all"
     normalized_limit = max(1, min(200, limit))
     sections = search_runs(

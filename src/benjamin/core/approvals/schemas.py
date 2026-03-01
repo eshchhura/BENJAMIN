@@ -20,6 +20,7 @@ class PendingApproval(BaseModel):
     error: str | None = None
     required_scopes: list[str] = Field(default_factory=list)
     policy_snapshot: dict[str, Any] = Field(default_factory=dict)
+    policy_snapshot_at_approve: dict[str, Any] = Field(default_factory=dict)
 
 
 class ApproveRequest(BaseModel):
