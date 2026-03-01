@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -163,8 +164,6 @@ def ui_delete_rule(request: Request, rule_id: str):
     return RedirectResponse(url="/ui/rules", status_code=303)
 
 
-
-
 @router.post("/rules/{rule_id}/reset-state")
 def ui_reset_rule_state(request: Request, rule_id: str):
     rule = request.app.state.rule_store.get(rule_id)
@@ -182,6 +181,7 @@ def ui_reset_rule_state(request: Request, rule_id: str):
             rule.model_copy(update={"state": reset_state, "last_run_iso": None, "last_match_iso": None})
         )
     return RedirectResponse(url="/ui/rules", status_code=303)
+
 
 @router.post("/rules/evaluate-now")
 def ui_rules_eval(request: Request):
@@ -207,3 +207,70 @@ def ui_memory(request: Request):
 def ui_memory_upsert(request: Request, key: str = Form(...), value: str = Form(...), scope: str = Form(default="global")):
     request.app.state.memory_manager.semantic.upsert(key=key, value=value, scope=scope)
     return RedirectResponse(url="/ui/memory", status_code=303)
+
+
+@router.get("/runs")
+def ui_runs(request: Request):
+    task_store = request.app.state.task_store
+    episodic = request.app.state.memory_manager.episodic.list_recent(limit=200)
+
+    rule_runs = [episode for episode in reversed(episodic) if episode.kind == "rule"][:20]
+    job_runs = [episode for episode in reversed(episodic) if episode.kind in {"briefing", "notification"}][:20]
+    approval_audits = [episode for episode in reversed(episodic) if episode.kind == "approval"][:20]
+
+    return templates.TemplateResponse(
+        "runs.html",
+        {
+            "request": request,
+            "tasks": task_store.list_recent(limit=50),
+            "rule_runs": rule_runs,
+            "job_runs": job_runs,
+            "approval_audits": approval_audits,
+        },
+    )
+
+
+@router.get("/runs/chat/{task_id}")
+def ui_run_chat_detail(request: Request, task_id: str):
+    record = request.app.state.task_store.get(task_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="task not found")
+    return templates.TemplateResponse(
+        "run_chat_detail.html",
+        {
+            "request": request,
+            "record": record,
+            "plan_json": json.dumps(record.plan, indent=2, ensure_ascii=False),
+            "step_results_json": json.dumps(record.step_results, indent=2, ensure_ascii=False),
+            "trace_json": json.dumps(record.trace_events, indent=2, ensure_ascii=False),
+        },
+    )
+
+
+@router.get("/runs/approvals/{approval_id}")
+def ui_run_approval_detail(request: Request, approval_id: str):
+    record = request.app.state.approval_service.store.get(approval_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="approval not found")
+    return templates.TemplateResponse(
+        "run_approval_detail.html",
+        {"request": request, "record": record, "record_json": json.dumps(record.model_dump(), indent=2, ensure_ascii=False)},
+    )
+
+
+@router.get("/runs/rules/{rule_id}")
+def ui_run_rule_detail(request: Request, rule_id: str):
+    rule = request.app.state.rule_store.get(rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+    episodes = request.app.state.memory_manager.episodic.list_recent(limit=400)
+    rule_runs = [episode for episode in reversed(episodes) if episode.kind == "rule" and episode.meta.get("rule_id") == rule_id][:20]
+    return templates.TemplateResponse(
+        "run_rule_detail.html",
+        {
+            "request": request,
+            "rule": rule,
+            "rule_json": json.dumps(rule.model_dump(), indent=2, ensure_ascii=False),
+            "rule_runs": rule_runs,
+        },
+    )

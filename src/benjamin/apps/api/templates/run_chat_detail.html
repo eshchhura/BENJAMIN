@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Chat Run Detail</h2>
+<p><strong>Task ID:</strong> {{ record.task_id }}</p>
+<p><strong>Timestamp:</strong> {{ record.ts_iso }}</p>
+<p><strong>Correlation ID:</strong> {{ record.correlation_id }}</p>
+<p><strong>User message:</strong> {{ record.user_message }}</p>
+<p><strong>Answer:</strong> {{ record.answer }}</p>
+
+<h3>Plan</h3>
+<pre>{{ plan_json }}</pre>
+
+<h3>Step Results</h3>
+<pre>{{ step_results_json }}</pre>
+
+<h3>Trace Timeline</h3>
+<pre>{{ trace_json }}</pre>
+{% endblock %}

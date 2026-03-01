@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Rule Detail</h2>
+<p><strong>Rule ID:</strong> {{ rule.id }}</p>
+<p><strong>Name:</strong> {{ rule.name }}</p>
+
+<h3>Rule JSON</h3>
+<pre>{{ rule_json }}</pre>
+
+<h3>Recent Rule Episodes</h3>
+{% if rule_runs %}
+  <ul>
+    {% for run in rule_runs %}
+    <li>{{ run.ts_iso }} — {{ run.summary }} — correlation: {{ run.meta.get("correlation_id", "") }}</li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No episodes for this rule yet.</p>
+{% endif %}
+{% endblock %}

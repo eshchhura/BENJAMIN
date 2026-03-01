@@ -56,3 +56,4 @@ class OrchestrationResult:
     step_results: list[StepResult] = field(default_factory=list)
     trace_events: list[dict[str, Any]] = field(default_factory=list)
     context: ContextPack | None = None
+    task_id: str | None = None

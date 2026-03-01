@@ -12,6 +12,6 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/")
-def chat(request: ChatRequest, orchestrator: Orchestrator = Depends(get_orchestrator)) -> dict[str, str]:
+def chat(request: ChatRequest, orchestrator: Orchestrator = Depends(get_orchestrator)) -> dict[str, str | None]:
     response = orchestrator.run(request.message)
-    return {"response": response.final_response}
+    return {"response": response.final_response, "task_id": response.task_id}

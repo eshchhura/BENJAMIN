@@ -9,6 +9,7 @@ import uvicorn
 
 from benjamin.core.rules.evaluator import run_rules_evaluation
 from benjamin.core.rules.store import RuleStore
+from benjamin.core.runs.store import TaskStore
 
 from .deps import (
     get_approval_service,
@@ -82,6 +83,10 @@ def startup() -> None:
     app.state.calendar_connector = get_calendar_connector()
     app.state.email_connector = get_email_connector()
     app.state.rule_store = RuleStore(state_dir=app.state.memory_manager.state_dir)
+    app.state.task_store = TaskStore(
+        state_dir=app.state.memory_manager.state_dir,
+        max_records=int(os.getenv("BENJAMIN_TASKS_MAX", "500")),
+    )
     app.state.last_rule_results = []
 
     app.state.scheduler_service.start()
