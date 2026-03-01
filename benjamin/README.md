@@ -25,7 +25,9 @@ uvicorn apps.api.main:app --reload
 ## Run tests
 
 ```bash
-pytest
+python scripts/test.py
+# or, after editable install:
+python -m pytest -q
 ```
 
 ## Example request

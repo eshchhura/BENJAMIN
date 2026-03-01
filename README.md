@@ -16,7 +16,7 @@ A starter orchestration platform for agentic workflows.
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
-pytest -q
+python scripts/test.py
 
 # Optional Google read-only integrations
 pip install -e .[dev,google]
@@ -29,7 +29,13 @@ Always install the project in editable mode before running tests so imports reso
 
 ```bash
 python -m pip install -e .[dev]
-pytest -q
+python -m pytest -q
+```
+
+Preferred test command:
+
+```bash
+python scripts/test.py
 ```
 
 ## Run services
