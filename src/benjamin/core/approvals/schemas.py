@@ -18,6 +18,8 @@ class PendingApproval(BaseModel):
     rationale: str
     result: StepResult | None = None
     error: str | None = None
+    required_scopes: list[str] = Field(default_factory=list)
+    policy_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
 class ApproveRequest(BaseModel):

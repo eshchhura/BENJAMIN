@@ -70,6 +70,9 @@ benjamin-worker
 - `BENJAMIN_APPROVALS_TTL_HOURS`: pending approval time-to-live in hours (default `72`).
 - `BENJAMIN_RULES_ENABLED`: enable periodic rules evaluator (`on`/`off`, default `off`).
 - `BENJAMIN_RULES_EVERY_MINUTES`: interval for evaluator job (default `5`).
+- `BENJAMIN_SCOPE_MODE`: permissions scope mode (`default`/`allowlist`, default `default`).
+- `BENJAMIN_SCOPES_ENABLED`: comma-separated scope list used as write allowlist in `default` mode or strict allowlist in `allowlist` mode.
+- `BENJAMIN_RULES_ALLOWED_SCOPES`: comma-separated scope list rules are allowed to propose (default `reminders.write`).
 - `BENJAMIN_AUTH_MODE`: API/UI auth mode (`off`/`token`, default `token`).
 - `BENJAMIN_AUTH_TOKEN`: required shared token when `BENJAMIN_AUTH_MODE=token`.
 - `BENJAMIN_EXPOSE_PUBLIC`: when `on`, `/chat` POST also requires auth token (default `off`).
@@ -91,6 +94,34 @@ Logs are emitted as JSONL to stdout and (by default) to `<BENJAMIN_STATE_DIR>/lo
 When auth mode is `token`, pass the token using either:
 - HTTP header: `X-BENJAMIN-TOKEN: <token>`
 - Cookie: `benjamin_token=<token>` (set by `/ui/login`)
+
+## Policy & Permissions v2
+
+Canonical scopes:
+
+- Read scopes (enabled by default in `default` mode): `filesystem.read`, `web.read`, `calendar.read`, `gmail.read`, `memory.read`, `rules.read`, `jobs.read`.
+- Write scopes (disabled by default): `reminders.write`, `calendar.write`, `gmail.draft`, `gmail.send`, `memory.write`, `rules.write`, `jobs.write`.
+
+Mode behavior:
+
+- `BENJAMIN_SCOPE_MODE=default`:
+  - all read scopes enabled automatically;
+  - write scopes enabled only when listed in `BENJAMIN_SCOPES_ENABLED`.
+- `BENJAMIN_SCOPE_MODE=allowlist`:
+  - only scopes listed in `BENJAMIN_SCOPES_ENABLED` are enabled.
+
+Rules constraints:
+
+- Rules `propose_step` actions are additionally constrained by `BENJAMIN_RULES_ALLOWED_SCOPES`.
+- Default rules allowlist is `reminders.write` only.
+
+Example: enable calendar event creation + Gmail drafts, while keeping Gmail send disabled:
+
+```bash
+export BENJAMIN_SCOPE_MODE=default
+export BENJAMIN_SCOPES_ENABLED="calendar.write,gmail.draft"
+# Deliberately omit gmail.send
+```
 
 ## Memory API examples
 

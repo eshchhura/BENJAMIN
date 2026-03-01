@@ -23,6 +23,16 @@ class Executor:
     ) -> StepResult:
         if step.skill_name:
             skill = registry.get(step.skill_name)
+            required_scopes = self.policy_engine.required_scopes(skill)
+            scopes_ok, disabled_scopes = self.policy_engine.permissions_policy.check_scopes(required_scopes)
+            if not scopes_ok:
+                if trace is not None:
+                    trace.emit(
+                        "PolicyDenied",
+                        {"step_id": step.id, "skill_name": step.skill_name, "disabled_scopes": disabled_scopes},
+                    )
+                return StepResult(step_id=step.id, ok=False, error=f"policy_denied:{','.join(disabled_scopes)}")
+
             requires_approval = self.policy_engine.requires_approval(skill, step_requires_approval=step.requires_approval)
             if requires_approval and not force_execute_writes:
                 payload = self._approval_payload(step)
@@ -32,6 +42,7 @@ class Executor:
                     requester=requester,
                     rationale=payload,
                     registry=registry,
+                    required_scopes=required_scopes,
                 )
                 if trace is not None:
                     trace.emit(

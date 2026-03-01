@@ -23,6 +23,8 @@
             <div>args: <code>{{ action.args }}</code></div>
             <div>rationale: {{ action.rationale }}</div>
             <div>would_create_approval: {{ action.would_create_approval }}</div>
+            <div>required_scopes: <code>{{ action.required_scopes }}</code></div>
+            {% if action.blocked %}<div><strong>BLOCKED: {{ action.blocked_reason }}</strong></div>{% endif %}
           </li>
         {% endif %}
       {% endfor %}

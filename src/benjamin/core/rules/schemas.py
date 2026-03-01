@@ -46,6 +46,9 @@ class PlannedActionProposeStep(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
     rationale: str
     would_create_approval: bool = True
+    required_scopes: list[str] = Field(default_factory=list)
+    blocked: bool = False
+    blocked_reason: str | None = None
 
 
 RulePlannedAction = PlannedActionNotify | PlannedActionProposeStep

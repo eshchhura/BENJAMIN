@@ -2,12 +2,23 @@
 {% block content %}
 <h2>Approvals</h2>
 <table>
-  <tr><th>ID</th><th>Status</th><th>Step</th><th>Actions</th></tr>
+  <tr><th>ID</th><th>Status</th><th>Step</th><th>Scopes</th><th>Actions</th></tr>
   {% for item in approvals %}
   <tr>
     <td>{{ item.id }}</td>
     <td>{{ item.status }}</td>
     <td>{{ item.step.skill_name }}</td>
+    <td>
+      {% if item.required_scopes %}
+        <ul>
+        {% for scope in item.required_scopes %}
+          <li>{{ scope }} ({{ "enabled" if is_scope_enabled.get(scope) else "disabled" }})</li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <em>none</em>
+      {% endif %}
+    </td>
     <td>
       {% if item.status == 'pending' %}
       <form method="post" action="/ui/approvals/{{ item.id }}/approve"><button type="submit">Approve</button></form>
