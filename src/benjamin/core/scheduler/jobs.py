@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from benjamin.core.integrations.base import CalendarConnector, EmailConnector
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.notifications.notifier import NotificationRouter, build_notification_router
+from benjamin.core.summarize.summarizer import Summarizer
 
 
 def _memory_manager_for_state(state_dir: str) -> MemoryManager:
@@ -27,6 +28,7 @@ def _build_default_connectors(state_dir: str) -> tuple[CalendarConnector | None,
         return GoogleCalendarConnector(token_path=token_path), GoogleGmailConnector(token_path=token_path)
     except Exception:
         return None, None
+
 
 def run_reminder(
     message: str,
@@ -68,6 +70,7 @@ def run_daily_briefing(
     now = datetime.now(timezone)
 
     sections: list[str] = []
+    section_map: dict[str, str] = {}
 
     if calendar_connector is not None:
         schedule = calendar_connector.search_events(
@@ -79,8 +82,12 @@ def run_daily_briefing(
         )
         if schedule:
             sections.extend(["Today's schedule:"])
+            schedule_lines = []
             for event in schedule[:5]:
-                sections.append(f"- {event.get('start_iso')} | {event.get('title', '(untitled)')}")
+                line = f"- {event.get('start_iso')} | {event.get('title', '(untitled)')}"
+                schedule_lines.append(line)
+                sections.append(line)
+            section_map["schedule"] = "\n".join(schedule_lines)
             sections.append("")
 
     if email_connector is not None:
@@ -91,11 +98,15 @@ def run_daily_briefing(
         messages = email_connector.search_messages(query=query, max_results=5)
         if messages:
             sections.extend(["Important emails:"])
+            email_lines = []
             for msg in messages[:5]:
                 summary = email_connector.thread_summary(msg.get("thread_id", ""), max_messages=3)
                 snippets = summary.get("snippets", [])
                 snippet = snippets[0] if snippets else msg.get("snippet", "")
-                sections.append(f"- {msg.get('subject', '(no subject)')} — {snippet}")
+                line = f"- {msg.get('subject', '(no subject)')} — {snippet}"
+                email_lines.append(line)
+                sections.append(line)
+            section_map["email"] = "\n".join(email_lines)
             sections.append("")
 
     event_lines = [f"- {event.summary}" for event in recent_events] or ["- No recent events"]
@@ -109,7 +120,15 @@ def run_daily_briefing(
             *preference_lines,
         ]
     )
+    section_map["recent_episodes"] = "\n".join(event_lines)
+    section_map["preferences"] = "\n".join(preference_lines)
     body = "\n".join(sections)
+
+    summarizer = Summarizer()
+    if summarizer.enabled:
+        compressed = summarizer.compress_briefing(section_map)
+        if compressed.strip():
+            body = compressed
 
     correlation_id = str(uuid4())
     active_router = router or build_notification_router()
