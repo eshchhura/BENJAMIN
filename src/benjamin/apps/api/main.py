@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+from urllib import error, request
 
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -30,6 +33,54 @@ from .routes_memory import router as memory_router
 from .routes_rules import router as rules_router
 from .routes_tasks import router as tasks_router
 from .routes_ui import router as ui_router
+from benjamin.core.models.llm_provider import BenjaminLLM
+
+
+def _is_on(name: str, default: str = "off") -> bool:
+    return os.getenv(name, default).strip().casefold() == "on"
+
+
+def _state_dir() -> Path:
+    configured = os.getenv("BENJAMIN_STATE_DIR")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".benjamin"
+
+
+def _google_token_path(state_dir: Path) -> Path:
+    configured = os.getenv("BENJAMIN_GOOGLE_TOKEN_PATH")
+    if configured:
+        return Path(configured).expanduser()
+    return state_dir / "google_token.json"
+
+
+def _llm_base_url(provider: str) -> str:
+    if provider == "vllm":
+        url = os.getenv("BENJAMIN_VLLM_URL", "http://127.0.0.1:8001/v1/chat/completions")
+    elif provider == "http":
+        url = os.getenv("BENJAMIN_HTTP_URL", os.getenv("BENJAMIN_VLLM_URL", "http://127.0.0.1:8001/v1/chat/completions"))
+    else:
+        return ""
+    if url.endswith("/v1/chat/completions"):
+        return url[: -len("/v1/chat/completions")]
+    return url.rstrip("/")
+
+
+def _llm_reachable(provider: str, timeout_s: float = 1.0) -> bool:
+    if provider not in {"vllm", "http"}:
+        return False
+    base_url = _llm_base_url(provider)
+    if not base_url:
+        return False
+    endpoint = f"{base_url}/v1/models"
+    req = request.Request(endpoint, method="GET")
+    try:
+        with request.urlopen(req, timeout=timeout_s) as response:  # nosec B310
+            return 200 <= response.status < 500
+    except (error.URLError, TimeoutError, ValueError):
+        return False
+    except Exception:
+        return False
 
 app = FastAPI(title="Benjamin API")
 app.mount("/ui/static", StaticFiles(directory="src/benjamin/apps/api/static"), name="ui-static")
@@ -150,6 +201,60 @@ def health() -> dict[str, str]:
 @app.get("/healthz")
 def healthz() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.get("/healthz/full")
+def healthz_full() -> dict[str, object]:
+    provider = os.getenv("BENJAMIN_LLM_PROVIDER", "off").strip().casefold()
+    state_dir = _state_dir()
+    google_enabled = _is_on("BENJAMIN_GOOGLE_ENABLED", "off")
+    token_path = _google_token_path(state_dir)
+    auth_mode = os.getenv("BENJAMIN_AUTH_MODE", "token").strip().casefold()
+    auth_enabled = auth_mode != "off"
+
+    calendar_ready = get_calendar_connector() is not None
+    gmail_ready = get_email_connector() is not None
+    llm_reachable = _llm_reachable(provider)
+    llm_features = {
+        "planner": BenjaminLLM.feature_enabled("BENJAMIN_LLM_PLANNER"),
+        "summarizer": BenjaminLLM.feature_enabled("BENJAMIN_LLM_SUMMARIZER"),
+        "drafter": BenjaminLLM.feature_enabled("BENJAMIN_LLM_DRAFTER"),
+        "rule_builder": BenjaminLLM.feature_enabled("BENJAMIN_LLM_RULE_BUILDER"),
+        "retrieval": BenjaminLLM.feature_enabled("BENJAMIN_LLM_RETRIEVAL"),
+    }
+
+    state_writable = os.access(state_dir, os.W_OK)
+    payload: dict[str, object] = {
+        "ok": True,
+        "python": {"version": sys.version.split()[0]},
+        "state_dir": {"path": str(state_dir), "writable": state_writable},
+        "auth": {"mode": auth_mode, "enabled": auth_enabled},
+        "llm": {
+            "provider": provider,
+            "url": _llm_base_url(provider),
+            "reachable": llm_reachable,
+            "features": llm_features,
+        },
+        "google": {
+            "enabled": google_enabled,
+            "token_present": token_path.exists(),
+            "calendar_ready": calendar_ready,
+            "gmail_ready": gmail_ready,
+        },
+        "scheduler": {
+            "rules_enabled": _is_on("BENJAMIN_RULES_ENABLED", "off"),
+            "daily_briefing_enabled": any(job.id == "daily-briefing" for job in app.state.scheduler_service.list_jobs()),
+        },
+    }
+
+    if auth_enabled and not os.getenv("BENJAMIN_AUTH_TOKEN"):
+        payload["ok"] = False
+    if not state_writable:
+        payload["ok"] = False
+    if google_enabled and not token_path.exists():
+        payload["ok"] = False
+
+    return payload
 
 
 def run() -> None:

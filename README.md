@@ -23,6 +23,10 @@ pip install -e .[dev,google]
 ```
 
 
+## Runbook
+
+See the operational runbook for one-command dev startup, environment checks, and troubleshooting: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
 ## Development workflow
 
 Always install the project in editable mode before running tests so imports resolve from the package metadata (no `PYTHONPATH` needed):
