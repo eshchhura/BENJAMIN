@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
@@ -18,6 +19,7 @@ from .deps import (
     get_orchestrator,
     get_scheduler_service,
 )
+from .auth import is_auth_enabled, is_request_authenticated, should_protect_chat_post
 from .routes_approvals import router as approvals_router
 from .routes_chat import router as chat_router
 from .routes_integrations import router as integrations_router
@@ -38,6 +40,36 @@ app.include_router(integrations_router, prefix="/integrations", tags=["integrati
 app.include_router(approvals_router, prefix="/approvals", tags=["approvals"])
 app.include_router(rules_router, prefix="/rules", tags=["rules"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
+
+
+@app.middleware("http")
+async def auth_middleware(request, call_next):
+    path = request.url.path
+    method = request.method.upper()
+
+    if path.startswith("/healthz"):
+        return await call_next(request)
+
+    if not is_auth_enabled():
+        return await call_next(request)
+
+    if path.startswith("/ui"):
+        if path == "/ui/login" and method in {"GET", "POST"}:
+            return await call_next(request)
+        if is_request_authenticated(request):
+            return await call_next(request)
+        return RedirectResponse(url="/ui/login", status_code=302)
+
+    protected_prefixes = ("/approvals", "/jobs", "/rules", "/memory")
+    if method in {"POST", "PUT", "PATCH", "DELETE"} and path.startswith(protected_prefixes):
+        if not is_request_authenticated(request):
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+
+    if should_protect_chat_post() and method == "POST" and path.startswith("/chat"):
+        if not is_request_authenticated(request):
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+
+    return await call_next(request)
 
 
 @app.on_event("startup")
@@ -79,6 +111,11 @@ def shutdown() -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, bool]:
+    return {"ok": True}
 
 
 def run() -> None:

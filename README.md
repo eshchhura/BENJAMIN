@@ -63,6 +63,13 @@ benjamin-worker
 - `BENJAMIN_APPROVALS_TTL_HOURS`: pending approval time-to-live in hours (default `72`).
 - `BENJAMIN_RULES_ENABLED`: enable periodic rules evaluator (`on`/`off`, default `off`).
 - `BENJAMIN_RULES_EVERY_MINUTES`: interval for evaluator job (default `5`).
+- `BENJAMIN_AUTH_MODE`: API/UI auth mode (`off`/`token`, default `token`).
+- `BENJAMIN_AUTH_TOKEN`: required shared token when `BENJAMIN_AUTH_MODE=token`.
+- `BENJAMIN_EXPOSE_PUBLIC`: when `on`, `/chat` POST also requires auth token (default `off`).
+
+When auth mode is `token`, pass the token using either:
+- HTTP header: `X-BENJAMIN-TOKEN: <token>`
+- Cookie: `benjamin_token=<token>` (set by `/ui/login`)
 
 ## Memory API examples
 
@@ -73,6 +80,7 @@ curl "http://localhost:8000/memory/semantic?scope=global"
 # Explicitly teach a fact/preference
 curl -X POST "http://localhost:8000/memory/semantic" \
   -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
   -d '{"key":"preference:editor","value":"Use vim keybindings","scope":"global","tags":["preference"]}'
 
 # List last 20 episodic entries
@@ -88,15 +96,18 @@ curl "http://localhost:8000/jobs"
 # Create a one-off reminder
 curl -X POST "http://localhost:8000/jobs/reminder" \
   -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
   -d '{"message":"Submit expense report","run_at_iso":"2026-02-21T14:00:00+00:00"}'
 
 # Enable/update daily briefing schedule
 curl -X POST "http://localhost:8000/jobs/daily-briefing" \
   -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
   -d '{"time_hhmm":"09:00"}'
 
 # Remove a job
-curl -X DELETE "http://localhost:8000/jobs/daily-briefing"
+curl -X DELETE "http://localhost:8000/jobs/daily-briefing" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"
 ```
 
 
@@ -121,10 +132,16 @@ curl -X POST "http://localhost:8000/chat/"   -H "Content-Type: application/json"
 curl "http://localhost:8000/approvals?status=pending"
 
 # 3a) Approve and execute the stored step
-curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/approve"   -H "Content-Type: application/json"   -d '{"approver_note":"Looks good"}'
+curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/approve" \
+  -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
+  -d '{"approver_note":"Looks good"}'
 
 # 3b) Or reject it
-curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject"   -H "Content-Type: application/json"   -d '{"reason":"Not needed anymore"}'
+curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject" \
+  -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
+  -d '{"reason":"Not needed anymore"}'
 
 # 4) Inspect approval record to see stored execution result/error
 curl "http://localhost:8000/approvals"
@@ -155,13 +172,16 @@ curl "http://localhost:8000/rules"
 # Create deterministic gmail rule with notify action, cooldown, and action cap
 curl -X POST "http://localhost:8000/rules" \
   -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
   -d '{"name":"important inbox","trigger":{"type":"gmail","query":"label:inbox newer_than:1d","max_results":5},"condition":{"contains":"invoice"},"actions":[{"type":"notify","title":"Inbox rule","body_template":"Matched {{count}} items top={{top1}} at {{now_iso}}"}],"cooldown_minutes":30,"max_actions_per_run":1}'
 
 # Evaluate enabled rules immediately
-curl -X POST "http://localhost:8000/rules/evaluate-now"
+curl -X POST "http://localhost:8000/rules/evaluate-now" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"
 
 # Reset a rule's evaluation state (cursor, seen IDs, cooldown, run/match timestamps)
-curl -X POST "http://localhost:8000/rules/<RULE_ID>/reset-state"
+curl -X POST "http://localhost:8000/rules/<RULE_ID>/reset-state" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"
 ```
 
 ## Command Center UI

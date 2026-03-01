@@ -15,10 +15,28 @@
         <a href="/ui/jobs">Jobs</a>
         <a href="/ui/rules">Rules</a>
         <a href="/ui/memory">Memory</a>
+        <form method="post" action="/ui/logout" style="display:inline-block;margin-left:1rem;">
+          <button type="submit">Logout</button>
+        </form>
       </nav>
     </header>
     <main>
       {% block content %}{% endblock %}
     </main>
+    <script>
+      document.body.addEventListener("htmx:configRequest", function (event) {
+        const tokenCookie = document.cookie
+          .split(";")
+          .map((value) => value.trim())
+          .find((value) => value.startsWith("benjamin_token="));
+        if (!tokenCookie) {
+          return;
+        }
+        const token = decodeURIComponent(tokenCookie.split("=").slice(1).join("="));
+        if (token) {
+          event.detail.headers["X-BENJAMIN-TOKEN"] = token;
+        }
+      });
+    </script>
   </body>
 </html>
