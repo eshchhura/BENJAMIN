@@ -80,6 +80,13 @@ benjamin-worker
 - `BENJAMIN_HTTP_BACKOFF_MAX_S`: max retry backoff in seconds (default `2.0`).
 - `BENJAMIN_HTTP_USER_AGENT`: shared HTTP `User-Agent` header value (default `BENJAMIN/1.0`).
 - `BENJAMIN_PING_CACHE_TTL_S`: TTL in seconds for cached `/healthz/full` LLM reachability pings (default `10`).
+- `BENJAMIN_LOG_LEVEL`: structured app log level (`DEBUG`/`INFO`/`WARNING`/`ERROR`, default `INFO`).
+- `BENJAMIN_LOG_TO_FILE`: enable rotating log file output (`on`/`off`, default `on`).
+- `BENJAMIN_LOG_DIR`: optional log directory override (default `<BENJAMIN_STATE_DIR>/logs`).
+- `BENJAMIN_LOG_MAX_BYTES`: rotating log file max size in bytes (default `5000000`).
+- `BENJAMIN_LOG_BACKUP_COUNT`: rotating log backup count (default `5`).
+
+Logs are emitted as JSONL to stdout and (by default) to `<BENJAMIN_STATE_DIR>/logs/benjamin.log` with rotation.
 
 When auth mode is `token`, pass the token using either:
 - HTTP header: `X-BENJAMIN-TOKEN: <token>`

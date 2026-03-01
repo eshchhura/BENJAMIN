@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -10,6 +12,7 @@ from benjamin.core.ledger.keys import approval_execution_key
 from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.approvals.schemas import PendingApproval
 from benjamin.core.approvals.store import ApprovalStore, now_iso
+from benjamin.core.logging.context import correlation_id_var, log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.planner import Plan
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep, StepResult
@@ -21,6 +24,7 @@ class ApprovalService:
         self.store = store
         self.memory_manager = memory_manager
         self.ledger = ledger or ExecutionLedger(memory_manager.state_dir)
+        self.logger = logging.getLogger("benjamin.approvals")
 
     def create_pending(self, step: PlanStep, ctx: ContextPack, requester: dict, rationale: str, registry: SkillRegistry) -> PendingApproval:
         if not step.skill_name:
@@ -31,7 +35,7 @@ class ApprovalService:
 
         created_at = datetime.now(timezone.utc)
         ttl_hours = int(os.getenv("BENJAMIN_APPROVALS_TTL_HOURS", "72"))
-        correlation_id = str(requester.get("correlation_id") or uuid4())
+        correlation_id = str(requester.get("correlation_id") or correlation_id_var.get() or uuid4())
         enriched_requester = dict(requester)
         enriched_requester.setdefault("correlation_id", correlation_id)
         record = PendingApproval(
@@ -74,69 +78,86 @@ class ApprovalService:
             self._persist_or_clean(record)
             raise HTTPException(status_code=400, detail="approval expired")
 
-        correlation_id = str(record.requester.get("correlation_id") or uuid4())
-        execution_key = approval_execution_key(record.id, record.step)
-        started = self.ledger.try_start(
-            execution_key,
-            kind="approval_exec",
-            correlation_id=correlation_id,
-            meta={"approval_id": record.id, "skill_name": record.step.skill_name},
-        )
-        if not started:
-            record.status = "approved"
-            record.result = StepResult(
-                step_id=record.step.id,
-                ok=True,
-                output='{"skipped":true,"reason":"idempotent_duplicate"}',
+        correlation_id = str(record.requester.get("correlation_id") or correlation_id_var.get() or uuid4())
+        started_at = time.perf_counter()
+        with log_context(correlation_id=correlation_id, approval_id=record.id):
+            self.logger.info("approval_exec_started")
+            execution_key = approval_execution_key(record.id, record.step)
+            started = self.ledger.try_start(
+                execution_key,
+                kind="approval_exec",
+                correlation_id=correlation_id,
+                meta={"approval_id": record.id, "skill_name": record.step.skill_name},
             )
-            record.error = None
+            if not started:
+                record.status = "approved"
+                record.result = StepResult(
+                    step_id=record.step.id,
+                    ok=True,
+                    output='{"skipped":true,"reason":"idempotent_duplicate"}',
+                )
+                record.error = None
+                self.memory_manager.episodic.append(
+                    kind="approval",
+                    summary=f"Skipped duplicate approval for {record.step.skill_name}",
+                    meta={
+                        "approval_id": record.id,
+                        "step_id": record.step.id,
+                        "ok": True,
+                        "approver_note": approver_note,
+                        "correlation_id": correlation_id,
+                        "skipped": True,
+                        "reason": "idempotent_duplicate",
+                    },
+                )
+                record.requester = {**record.requester, "correlation_id": correlation_id}
+                self._persist_or_clean(record)
+                self.logger.info(
+                    "approval_exec_completed",
+                    extra={"extra_fields": {"status": "skipped", "duration_ms": int((time.perf_counter() - started_at) * 1000)}},
+                )
+                return record
+
+            context = ContextPack(goal=record.context.get("goal", "approved execution"), cwd=record.context.get("cwd"))
+            try:
+                result = executor.execute_plan(
+                    Plan(goal=context.goal, steps=[record.step]),
+                    context=context,
+                    registry=registry,
+                    trace=None,
+                    approval_service=self,
+                    requester={"source": "approval", "approval_id": record.id, "approver_note": approver_note, "correlation_id": correlation_id},
+                    force_execute_writes=True,
+                )[0]
+            except Exception as exc:
+                self.ledger.mark(execution_key, "failed", meta_update={"error": str(exc)})
+                self.logger.exception("approval_exec_completed", extra={"extra_fields": {"status": "failed"}})
+                raise
+
+            if result.ok:
+                self.ledger.mark(execution_key, "succeeded")
+            else:
+                self.ledger.mark(execution_key, "failed", meta_update={"error": result.error or "execution_failed"})
+            record.status = "approved"
+            record.result = result
+            record.error = result.error
             self.memory_manager.episodic.append(
                 kind="approval",
-                summary=f"Skipped duplicate approval for {record.step.skill_name}",
-                meta={
-                    "approval_id": record.id,
-                    "step_id": record.step.id,
-                    "ok": True,
-                    "approver_note": approver_note,
-                    "correlation_id": correlation_id,
-                    "skipped": True,
-                    "reason": "idempotent_duplicate",
-                },
+                summary=f"Approved and executed {record.step.skill_name}",
+                meta={"approval_id": record.id, "step_id": record.step.id, "ok": result.ok, "approver_note": approver_note, "correlation_id": correlation_id},
             )
             record.requester = {**record.requester, "correlation_id": correlation_id}
             self._persist_or_clean(record)
+            self.logger.info(
+                "approval_exec_completed",
+                extra={
+                    "extra_fields": {
+                        "status": "ok" if result.ok else "failed",
+                        "duration_ms": int((time.perf_counter() - started_at) * 1000),
+                    }
+                },
+            )
             return record
-
-        context = ContextPack(goal=record.context.get("goal", "approved execution"), cwd=record.context.get("cwd"))
-        try:
-            result = executor.execute_plan(
-                Plan(goal=context.goal, steps=[record.step]),
-                context=context,
-                registry=registry,
-                trace=None,
-                approval_service=self,
-                requester={"source": "approval", "approval_id": record.id, "approver_note": approver_note, "correlation_id": correlation_id},
-                force_execute_writes=True,
-            )[0]
-        except Exception as exc:
-            self.ledger.mark(execution_key, "failed", meta_update={"error": str(exc)})
-            raise
-
-        if result.ok:
-            self.ledger.mark(execution_key, "succeeded")
-        else:
-            self.ledger.mark(execution_key, "failed", meta_update={"error": result.error or "execution_failed"})
-        record.status = "approved"
-        record.result = result
-        record.error = result.error
-        self.memory_manager.episodic.append(
-            kind="approval",
-            summary=f"Approved and executed {record.step.skill_name}",
-            meta={"approval_id": record.id, "step_id": record.step.id, "ok": result.ok, "approver_note": approver_note, "correlation_id": correlation_id},
-        )
-        record.requester = {**record.requester, "correlation_id": correlation_id}
-        self._persist_or_clean(record)
-        return record
 
     def reject(self, id: str, reason: str | None) -> PendingApproval:
         record = self.store.get(id)
@@ -152,17 +173,20 @@ class ApprovalService:
             self._persist_or_clean(record)
             raise HTTPException(status_code=400, detail="approval expired")
 
-        correlation_id = str(uuid4())
-        record.status = "rejected"
-        record.error = reason
-        self.memory_manager.episodic.append(
-            kind="approval",
-            summary=f"Rejected {record.step.skill_name}",
-            meta={"approval_id": record.id, "reason": reason, "correlation_id": correlation_id},
-        )
-        record.requester = {**record.requester, "correlation_id": correlation_id}
-        self._persist_or_clean(record)
-        return record
+        correlation_id = str(record.requester.get("correlation_id") or correlation_id_var.get() or uuid4())
+        with log_context(correlation_id=correlation_id, approval_id=record.id):
+            self.logger.info("approval_exec_started", extra={"extra_fields": {"action": "reject"}})
+            record.status = "rejected"
+            record.error = reason
+            self.memory_manager.episodic.append(
+                kind="approval",
+                summary=f"Rejected {record.step.skill_name}",
+                meta={"approval_id": record.id, "reason": reason, "correlation_id": correlation_id},
+            )
+            record.requester = {**record.requester, "correlation_id": correlation_id}
+            self._persist_or_clean(record)
+            self.logger.info("approval_exec_completed", extra={"extra_fields": {"status": "rejected"}})
+            return record
 
     def cleanup_expired(self) -> int:
         return self.store.cleanup_expired(now_iso())

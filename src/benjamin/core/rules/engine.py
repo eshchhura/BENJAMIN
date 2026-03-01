@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Any
@@ -8,6 +9,7 @@ from typing import Any
 from benjamin.core.approvals.service import ApprovalService
 from benjamin.core.ledger.keys import rule_action_key
 from benjamin.core.ledger.ledger import ExecutionLedger
+from benjamin.core.logging.context import log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep
 from benjamin.core.skills.registry import SkillRegistry
@@ -23,6 +25,9 @@ from .schemas import (
     RuleTestPreview,
     now_iso,
 )
+
+
+logger = logging.getLogger("benjamin.rules.engine")
 
 
 class RuleEngine:
@@ -47,6 +52,11 @@ class RuleEngine:
     def evaluate_rule(self, rule: Rule, ctx: dict | None = None) -> RuleRunResult:
         correlation_id = str((ctx or {}).get("correlation_id") or uuid4())
         notes: list[str] = []
+        with log_context(correlation_id=correlation_id, rule_id=rule.id):
+            logger.info("rules_evaluation_started")
+            return self._evaluate_rule(rule=rule, correlation_id=correlation_id, notes=notes)
+
+    def _evaluate_rule(self, rule: Rule, correlation_id: str, notes: list[str]) -> RuleRunResult:
         state = rule.state
         now = datetime.now(timezone.utc)
         state.last_run_iso = now.isoformat()
@@ -135,6 +145,7 @@ class RuleEngine:
                 summary=f"Ran rule {rule.name}: matched={matched} count={match_count}",
                 meta={"rule_id": rule.id, "trigger_type": rule.trigger.type, "correlation_id": correlation_id},
             )
+            logger.info("rules_evaluation_completed", extra={"extra_fields": {"matched": matched, "match_count": match_count}})
             return RuleRunResult(rule_id=rule.id, ok=True, matched=matched, match_count=match_count, notes=notes)
         except Exception as exc:
             self._sync_legacy_state(rule)
@@ -143,6 +154,7 @@ class RuleEngine:
                 summary=f"Rule {rule.name} failed",
                 meta={"rule_id": rule.id, "error": str(exc), "correlation_id": correlation_id},
             )
+            logger.exception("rules_evaluation_completed")
             return RuleRunResult(rule_id=rule.id, ok=False, matched=False, match_count=0, notes=notes, error=str(exc))
 
     def evaluate_rule_preview(self, rule: Rule, ctx: dict | None = None, include_seen: bool = False) -> RuleTestPreview:

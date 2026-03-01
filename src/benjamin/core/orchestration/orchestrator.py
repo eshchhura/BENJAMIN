@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -8,6 +10,7 @@ from benjamin.core.approvals.service import ApprovalService
 from benjamin.core.approvals.store import ApprovalStore
 from benjamin.core.integrations.base import CalendarConnector, EmailConnector
 from benjamin.core.ledger.ledger import ExecutionLedger
+from benjamin.core.logging.context import correlation_id_var, log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.observability.trace import Trace
 from benjamin.core.runs.schemas import TaskRecord
@@ -63,114 +66,134 @@ class Orchestrator:
 
     def handle(self, request: ChatRequest) -> OrchestrationResult:
         task_id = str(uuid4())
-        correlation_id = str(uuid4())
-        trace = Trace(task=request.message, task_id=task_id, correlation_id=correlation_id)
-        trace.emit("TaskStarted", {"source": "chat"})
-        memory = self.memory_manager.retrieve_context(request.message)
-        trace.emit(
-            "MemoryRetrieved",
-            {
-                "semantic_count": len(memory.get("semantic", [])),
-                "episodic_count": len(memory.get("episodic", [])),
-            },
-        )
+        correlation_id = correlation_id_var.get() or str(uuid4())
+        logger = logging.getLogger("benjamin.orchestrator")
+        started_at = time.perf_counter()
 
-        context = ContextPack(goal=request.message, memory=memory, cwd=os.getcwd())
-        trace.emit("PlannerStarted", {"llm_enabled": self.planner.llm_enabled})
-        plan = self.planner.plan(request.message, memory=context.memory)
-        trace.emit("PlannerSucceeded", {"step_count": len(plan.steps)})
-        trace.emit("PlanCriticStarted", {"step_count": len(plan.steps)})
-        critic_result = self.critic.review(plan)
-        if not critic_result.ok:
+        with log_context(correlation_id=correlation_id, task_id=task_id):
+            logger.info("chat_request_received")
+            trace = Trace(task=request.message, task_id=task_id, correlation_id=correlation_id)
+            trace.emit("TaskStarted", {"source": "chat"})
+            memory = self.memory_manager.retrieve_context(request.message)
             trace.emit(
-                "PlanCriticFailed",
-                {"errors": critic_result.errors, "question": critic_result.user_question},
+                "MemoryRetrieved",
+                {
+                    "semantic_count": len(memory.get("semantic", [])),
+                    "episodic_count": len(memory.get("episodic", [])),
+                },
             )
-            final_response = critic_result.user_question or "I need a bit more detail before I can continue."
-            result = OrchestrationResult(
-                task_id=task_id,
-                steps=[step.description for step in plan.steps],
-                outputs=[],
-                final_response=final_response,
-                step_results=[],
-                trace_events=trace.events,
+
+            context = ContextPack(goal=request.message, memory=memory, cwd=os.getcwd())
+            trace.emit("PlannerStarted", {"llm_enabled": self.planner.llm_enabled})
+            plan = self.planner.plan(request.message, memory=context.memory)
+            logger.info("plan_created", extra={"extra_fields": {"step_count": len(plan.steps)}})
+            trace.emit("PlannerSucceeded", {"step_count": len(plan.steps)})
+            trace.emit("PlanCriticStarted", {"step_count": len(plan.steps)})
+            critic_result = self.critic.review(plan)
+            if not critic_result.ok:
+                logger.warning(
+                    "plan_critic_failed",
+                    extra={"extra_fields": {"reason": critic_result.user_question or "validation_failed"}},
+                )
+                trace.emit(
+                    "PlanCriticFailed",
+                    {"errors": critic_result.errors, "question": critic_result.user_question},
+                )
+                final_response = critic_result.user_question or "I need a bit more detail before I can continue."
+                result = OrchestrationResult(
+                    task_id=task_id,
+                    steps=[step.description for step in plan.steps],
+                    outputs=[],
+                    final_response=final_response,
+                    step_results=[],
+                    trace_events=trace.events,
+                    context=context,
+                )
+                self._persist_task_record(
+                    task_id=task_id,
+                    correlation_id=correlation_id,
+                    request=request,
+                    plan=plan,
+                    step_results=[],
+                    final_response=final_response,
+                    trace_events=trace.events,
+                )
+                return result
+
+            for normalization in critic_result.normalizations:
+                trace.emit(
+                    "PlanNormalized",
+                    {
+                        "step_id": normalization.step_id,
+                        "changes": normalization.changes,
+                    },
+                )
+            trace.emit("PlanCriticPassed", {"warnings_count": len(critic_result.warnings)})
+
+            step_results = self.executor.execute_plan(
+                plan,
                 context=context,
+                registry=self.registry,
+                trace=trace,
+                approval_service=self.approval_service,
+                requester={"source": "chat", "task_id": task_id, "correlation_id": correlation_id},
+            )
+            outputs = [result.output or result.error or "" for result in step_results]
+            approval_errors = [
+                result.error
+                for result in step_results
+                if result.error and result.error.startswith("approval_required:")
+            ]
+            if approval_errors:
+                approval_id = approval_errors[0].split(":", 1)[1]
+                final_response = (
+                    f"Approval required to proceed. Approval ID: {approval_id}. "
+                    "Use GET /approvals and POST /approvals/{id}/approve to continue."
+                )
+            else:
+                final_response = outputs[-1] if outputs else ""
+
+            if self.memory_manager.autowrite_enabled:
+                proposal = self.memory_manager.propose_writes(request.message, final_response)
+                trace.emit(
+                    "MemoryWriteProposed",
+                    {
+                        "semantic_count": len(proposal.get("semantic_upserts", [])),
+                        "episodic_count": len(proposal.get("episodes", [])),
+                    },
+                )
+                committed = self.memory_manager.commit(proposal)
+                trace.emit("MemoryWriteCommitted", committed)
+
+            trace.emit("TaskCompleted", {"step_count": len(step_results), "approval_count": len(approval_errors)})
+            logger.info(
+                "chat_completed",
+                extra={
+                    "extra_fields": {
+                        "duration_ms": int((time.perf_counter() - started_at) * 1000),
+                        "approvals_created_count": len(approval_errors),
+                        "step_fail_count": sum(1 for result in step_results if not result.ok),
+                    }
+                },
             )
             self._persist_task_record(
                 task_id=task_id,
                 correlation_id=correlation_id,
                 request=request,
                 plan=plan,
-                step_results=[],
+                step_results=step_results,
                 final_response=final_response,
                 trace_events=trace.events,
             )
-            return result
-
-        for normalization in critic_result.normalizations:
-            trace.emit(
-                "PlanNormalized",
-                {
-                    "step_id": normalization.step_id,
-                    "changes": normalization.changes,
-                },
+            return OrchestrationResult(
+                task_id=task_id,
+                steps=plan.steps,
+                outputs=outputs,
+                final_response=final_response,
+                step_results=step_results,
+                trace_events=trace.events,
+                context=context,
             )
-        trace.emit("PlanCriticPassed", {"warnings_count": len(critic_result.warnings)})
-
-        step_results = self.executor.execute_plan(
-            plan,
-            context=context,
-            registry=self.registry,
-            trace=trace,
-            approval_service=self.approval_service,
-            requester={"source": "chat", "task_id": task_id, "correlation_id": correlation_id},
-        )
-        outputs = [result.output or result.error or "" for result in step_results]
-        approval_errors = [
-            result.error
-            for result in step_results
-            if result.error and result.error.startswith("approval_required:")
-        ]
-        if approval_errors:
-            approval_id = approval_errors[0].split(":", 1)[1]
-            final_response = (
-                f"Approval required to proceed. Approval ID: {approval_id}. "
-                "Use GET /approvals and POST /approvals/{id}/approve to continue."
-            )
-        else:
-            final_response = outputs[-1] if outputs else ""
-
-        if self.memory_manager.autowrite_enabled:
-            proposal = self.memory_manager.propose_writes(request.message, final_response)
-            trace.emit(
-                "MemoryWriteProposed",
-                {
-                    "semantic_count": len(proposal.get("semantic_upserts", [])),
-                    "episodic_count": len(proposal.get("episodes", [])),
-                },
-            )
-            committed = self.memory_manager.commit(proposal)
-            trace.emit("MemoryWriteCommitted", committed)
-
-        trace.emit("TaskCompleted", {"step_count": len(step_results), "approval_count": len(approval_errors)})
-        self._persist_task_record(
-            task_id=task_id,
-            correlation_id=correlation_id,
-            request=request,
-            plan=plan,
-            step_results=step_results,
-            final_response=final_response,
-            trace_events=trace.events,
-        )
-        return OrchestrationResult(
-            task_id=task_id,
-            steps=plan.steps,
-            outputs=outputs,
-            final_response=final_response,
-            step_results=step_results,
-            trace_events=trace.events,
-            context=context,
-        )
 
     def _persist_task_record(
         self,

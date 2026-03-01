@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from uuid import uuid4
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +35,8 @@ from .routes_ui import router as ui_router
 from benjamin.core.cache.ttl import TTLCache
 from benjamin.core.http.client import request_with_retry
 from benjamin.core.http.errors import BenjaminHTTPError
+from benjamin.core.logging import configure_logging
+from benjamin.core.logging.context import log_context
 from benjamin.core.models.llm_provider import BenjaminLLM
 
 
@@ -101,6 +104,7 @@ def _llm_reachable(provider: str, timeout_s: float = 1.0) -> bool:
     return bool(_HEALTH_PING_CACHE.get_or_set(cache_key, ttl_s, lambda: _llm_reachable_uncached(provider, timeout_s=timeout_s)))
 
 app = FastAPI(title="Benjamin API")
+configure_logging(_state_dir())
 app.mount("/ui/static", StaticFiles(directory="src/benjamin/apps/api/static"), name="ui-static")
 
 app.include_router(chat_router, prefix="/chat", tags=["chat"])
@@ -111,6 +115,15 @@ app.include_router(integrations_router, prefix="/integrations", tags=["integrati
 app.include_router(approvals_router, prefix="/approvals", tags=["approvals"])
 app.include_router(rules_router, prefix="/rules", tags=["rules"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
+
+
+@app.middleware("http")
+async def request_context_middleware(request, call_next):
+    correlation_id = request.headers.get("X-Correlation-ID") or str(uuid4())
+    with log_context(correlation_id=correlation_id):
+        response = await call_next(request)
+    response.headers["X-Correlation-ID"] = correlation_id
+    return response
 
 
 @app.middleware("http")
