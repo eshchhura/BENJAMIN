@@ -4,7 +4,7 @@ A starter orchestration platform for agentic workflows.
 
 ## Layout
 
-- `src/benjamin/apps/api`: FastAPI service exposing chat + memory + jobs endpoints.
+- `src/benjamin/apps/api`: FastAPI service exposing chat + memory + jobs + approvals + rules endpoints plus a Jinja2/HTMX Command Center at `/ui`.
 - `src/benjamin/apps/worker`: background scheduler worker.
 - `src/benjamin/core`: orchestration, skills, scheduler, notifications, memory, model adapters, and observability.
 - `infra`: local infra definitions and migrations.
@@ -55,6 +55,8 @@ benjamin-worker
 - `BENJAMIN_TEST_MODE`: when set, scheduler uses in-memory storage and does not start worker threads.
 - `BENJAMIN_APPROVALS_AUTOCLEAN`: approval retention policy (`on`/`off`, default `on`).
 - `BENJAMIN_APPROVALS_TTL_HOURS`: pending approval time-to-live in hours (default `72`).
+- `BENJAMIN_RULES_ENABLED`: enable periodic rules evaluator (`on`/`off`, default `off`).
+- `BENJAMIN_RULES_EVERY_MINUTES`: interval for evaluator job (default `5`).
 
 ## Memory API examples
 
@@ -133,3 +135,22 @@ When Google integrations are configured (`BENJAMIN_GOOGLE_ENABLED=on` and token 
 - Important emails (query from `BENJAMIN_GMAIL_QUERY_IMPORTANT`, up to 5 threads).
 
 If unavailable, briefing remains memory-only.
+
+## Rules API examples
+
+```bash
+# List all rules
+curl "http://localhost:8000/rules"
+
+# Create deterministic gmail rule with notify action
+curl -X POST "http://localhost:8000/rules" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"important inbox","trigger":{"type":"gmail","query":"label:inbox newer_than:1d","max_results":5},"condition":{"contains":"invoice"},"actions":[{"type":"notify","title":"Inbox rule","body_template":"Matched {{count}} items top={{top1}} at {{now_iso}}"}]}'
+
+# Evaluate enabled rules immediately
+curl -X POST "http://localhost:8000/rules/evaluate-now"
+```
+
+## Command Center UI
+
+Open `http://localhost:8000/ui` to use the web UI for chat, approvals, jobs, rules, and memory management.

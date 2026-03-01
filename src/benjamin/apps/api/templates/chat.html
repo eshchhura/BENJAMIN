@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Chat</h2>
+<form method="post" action="/ui/chat">
+  <textarea name="message" rows="4" placeholder="Ask BENJAMIN..."></textarea>
+  <button type="submit">Send</button>
+</form>
+{% if result %}
+<section>
+  <h3>Response</h3>
+  <pre>{{ result.final_response }}</pre>
+  <h3>Trace</h3>
+  <ul>
+    {% for event in result.trace_events %}
+      <li><strong>{{ event.name }}</strong>: {{ event.payload }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Memory</h2>
+<h3>Semantic facts</h3>
+<form method="post" action="/ui/memory/semantic">
+  <input name="key" placeholder="key" />
+  <input name="value" placeholder="value" />
+  <input name="scope" value="global" />
+  <button type="submit">Upsert</button>
+</form>
+<ul>{% for fact in semantic %}<li>{{ fact.scope }} :: {{ fact.key }} = {{ fact.value }}</li>{% endfor %}</ul>
+<h3>Episodic (recent)</h3>
+<ul>{% for episode in episodic %}<li>{{ episode.ts_iso }} {{ episode.kind }} — {{ episode.summary }}</li>{% endfor %}</ul>
+{% endblock %}
