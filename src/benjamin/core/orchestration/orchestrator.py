@@ -7,6 +7,7 @@ from uuid import uuid4
 from benjamin.core.approvals.service import ApprovalService
 from benjamin.core.approvals.store import ApprovalStore
 from benjamin.core.integrations.base import CalendarConnector, EmailConnector
+from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.observability.trace import Trace
 from benjamin.core.runs.schemas import TaskRecord
@@ -34,6 +35,7 @@ class Orchestrator:
         scheduler_service: SchedulerService | None = None,
         calendar_connector: CalendarConnector | None = None,
         email_connector: EmailConnector | None = None,
+        ledger: ExecutionLedger | None = None,
     ) -> None:
         self.memory_manager = memory_manager or MemoryManager()
         self.scheduler_service = scheduler_service or SchedulerService(state_dir=self.memory_manager.state_dir)
@@ -48,6 +50,7 @@ class Orchestrator:
         self.approval_service = ApprovalService(
             store=ApprovalStore(state_dir=self.memory_manager.state_dir),
             memory_manager=self.memory_manager,
+            ledger=ledger,
         )
         self.registry.register(RemindersCreateSkill(self.scheduler_service, str(self.memory_manager.state_dir)))
         self.registry.register(BriefingsDailySkill(str(self.memory_manager.state_dir)))

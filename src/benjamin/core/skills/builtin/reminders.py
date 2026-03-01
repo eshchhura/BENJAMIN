@@ -26,7 +26,7 @@ class RemindersCreateSkill:
             job_id=job_id,
             run_at_dt=run_at,
             func=run_reminder,
-            kwargs={"message": message, "state_dir": self.state_dir, "job_id": job_id},
+            kwargs={"message": message, "state_dir": self.state_dir, "job_id": job_id, "scheduled_run_iso": run_at.isoformat()},
         )
         return SkillResult(content=json.dumps({"job_id": job_id, "scheduled_for_iso": run_at.isoformat()}))
 
