@@ -96,6 +96,10 @@ Write skills (approval-gated):
 - `calendar.create_event`: create a Google Calendar event.
 - `gmail.draft_email`: create a Gmail draft (no send).
 
+## Plan Critic
+
+Before execution or approval creation, BENJAMIN runs a deterministic plan critic that validates and normalizes write-action arguments. If required details are missing or contradictory, it asks a clarification question instead of creating approvals or executing steps.
+
 ## Approval workflow (API-only)
 
 ```bash

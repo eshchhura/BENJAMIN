@@ -16,6 +16,7 @@ from benjamin.core.skills.builtin.gmail_write import GmailDraftEmailSkill
 from benjamin.core.skills.builtin.reminders import RemindersCreateSkill
 from benjamin.core.skills.registry import SkillRegistry
 
+from .critic import PlanCritic
 from .executor import Executor
 from .planner import Planner
 from .schemas import ChatRequest, ContextPack, OrchestrationResult
@@ -33,6 +34,7 @@ class Orchestrator:
         self.memory_manager = memory_manager or MemoryManager()
         self.scheduler_service = scheduler_service or SchedulerService(state_dir=self.memory_manager.state_dir)
         self.planner = Planner(llm_enabled=llm_planner_enabled)
+        self.critic = PlanCritic()
         self.executor = Executor()
         self.registry = SkillRegistry()
         self.approval_service = ApprovalService(
@@ -61,6 +63,33 @@ class Orchestrator:
 
         context = ContextPack(goal=request.message, memory=memory, cwd=os.getcwd())
         plan = self.planner.plan(request.message, memory=context.memory)
+        trace.emit("PlanCriticStarted", {"step_count": len(plan.steps)})
+        critic_result = self.critic.review(plan)
+        if not critic_result.ok:
+            trace.emit(
+                "PlanCriticFailed",
+                {"errors": critic_result.errors, "question": critic_result.user_question},
+            )
+            final_response = critic_result.user_question or "I need a bit more detail before I can continue."
+            return OrchestrationResult(
+                steps=[step.description for step in plan.steps],
+                outputs=[],
+                final_response=final_response,
+                step_results=[],
+                trace_events=trace.events,
+                context=context,
+            )
+
+        for normalization in critic_result.normalizations:
+            trace.emit(
+                "PlanNormalized",
+                {
+                    "step_id": normalization.step_id,
+                    "changes": normalization.changes,
+                },
+            )
+        trace.emit("PlanCriticPassed", {"warnings_count": len(critic_result.warnings)})
+
         step_results = self.executor.execute_plan(
             plan,
             context=context,
