@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 
 from benjamin.core.integrations.base import CalendarConnector
+from benjamin.core.retrieval.helper import RetrievalHelper
 from benjamin.core.skills.base import SkillResult
 
 
@@ -23,8 +24,9 @@ class CalendarSearchSkill:
     name = "calendar.search"
     side_effect = "read"
 
-    def __init__(self, connector: CalendarConnector | None = None) -> None:
+    def __init__(self, connector: CalendarConnector | None = None, retrieval_helper: RetrievalHelper | None = None) -> None:
         self.connector = connector
+        self.retrieval_helper = retrieval_helper or RetrievalHelper()
 
     def run(self, query: str) -> SkillResult:
         payload = CalendarSearchInput.model_validate_json(query or "{}")
@@ -38,11 +40,15 @@ class CalendarSearchSkill:
         else:
             window_end = now + timedelta(days=max(payload.days, 1))
 
+        query_text = payload.query
+        if query_text and ":" not in query_text:
+            query_text = self.retrieval_helper.rewrite_query(payload.query or "", target="calendar")
+
         events = self.connector.search_events(
             calendar_id=payload.calendar_id or os.getenv("BENJAMIN_CALENDAR_ID", "primary"),
             time_min_iso=now.isoformat(),
             time_max_iso=window_end.isoformat(),
-            query=payload.query,
+            query=query_text,
             max_results=payload.max_results,
         )
         normalized = [
@@ -54,4 +60,4 @@ class CalendarSearchSkill:
             }
             for event in events
         ]
-        return SkillResult(content=json.dumps({"events": normalized}))
+        return SkillResult(content=json.dumps({"events": normalized, "query_used": query_text}))

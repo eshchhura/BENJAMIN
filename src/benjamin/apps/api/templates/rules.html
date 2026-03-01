@@ -21,6 +21,13 @@
   </tr>
   {% endfor %}
 </table>
+<h3>Build rule from text (preview)</h3>
+<form method="post" action="/rules/from-text" hx-post="/rules/from-text" hx-target="#rule-preview" hx-swap="innerHTML">
+  <textarea name="text" placeholder="Describe a rule..." rows="3" cols="80"></textarea>
+  <button type="submit">Generate preview</button>
+</form>
+<pre id="rule-preview"></pre>
+
 <h3>Create rule</h3>
 <form method="post" action="/ui/rules/create">
   <input name="name" placeholder="Rule name" />

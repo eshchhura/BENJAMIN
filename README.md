@@ -194,3 +194,40 @@ Run history dashboard and drilldowns:
 - `/ui/runs/chat/{task_id}`: full plan/steps/trace for a chat run.
 - `/ui/runs/rules/{rule_id}`: rule definition plus recent episodes.
 - `/ui/runs/approvals/{approval_id}`: approval record detail.
+
+## Local GLM-4.7 (vLLM, single GPU)
+
+Run vLLM outside BENJAMIN (optional separate venv):
+
+```bash
+pip install vllm
+vllm serve zai-org/GLM-4.7 \
+  --host 127.0.0.1 --port 8001 \
+  --dtype auto \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.90
+```
+
+If you hit OOM, reduce `--max-model-len`, lower `--gpu-memory-utilization`, or use quantization supported by your setup.
+
+BENJAMIN environment:
+
+```bash
+export BENJAMIN_LLM_PROVIDER=vllm
+export BENJAMIN_LLM_MODEL=zai-org/GLM-4.7
+export BENJAMIN_VLLM_URL=http://127.0.0.1:8001/v1/chat/completions
+export BENJAMIN_LLM_TEMPERATURE=0.2
+export BENJAMIN_LLM_TIMEOUT_S=45
+
+export BENJAMIN_LLM_PLANNER=on
+export BENJAMIN_LLM_SUMMARIZER=on
+export BENJAMIN_LLM_DRAFTER=on
+export BENJAMIN_LLM_RULE_BUILDER=on
+export BENJAMIN_LLM_RETRIEVAL=on
+
+export BENJAMIN_LLM_STRICT_JSON=on
+export BENJAMIN_LLM_MAX_TOKENS_JSON=1200
+export BENJAMIN_LLM_MAX_TOKENS_TEXT=800
+```
+
+Set `BENJAMIN_LLM_PROVIDER=off` to keep fully deterministic behavior.

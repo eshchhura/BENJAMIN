@@ -73,7 +73,9 @@ class Orchestrator:
         )
 
         context = ContextPack(goal=request.message, memory=memory, cwd=os.getcwd())
+        trace.emit("PlannerStarted", {"llm_enabled": self.planner.llm_enabled})
         plan = self.planner.plan(request.message, memory=context.memory)
+        trace.emit("PlannerSucceeded", {"step_count": len(plan.steps)})
         trace.emit("PlanCriticStarted", {"step_count": len(plan.steps)})
         critic_result = self.critic.review(plan)
         if not critic_result.ok:

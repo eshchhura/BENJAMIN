@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, HTTPException, Request
+from pydantic import BaseModel
 
 from benjamin.core.rules.evaluator import run_rules_evaluation
+from benjamin.core.rules.nl_builder import RuleNLBuilder
 from benjamin.core.rules.schemas import Rule, RuleActionNotify, RuleCondition, RuleCreate, RuleTrigger
 from benjamin.core.rules.store import RuleStore
 
 
 router = APIRouter()
+
+
+class RuleFromTextRequest(BaseModel):
+    text: str
+
+
+class RuleFromTextResponse(BaseModel):
+    ok: bool
+    rule_preview: RuleCreate | None = None
+    error: str | None = None
 
 
 def _store_from_request(request: Request) -> RuleStore:
@@ -57,6 +69,21 @@ async def create_rule(
     return store.upsert(rule)
 
 
+@router.post("/from-text", response_model=RuleFromTextResponse)
+def rules_from_text(payload: RuleFromTextRequest, request: Request) -> RuleFromTextResponse:
+    builder = RuleNLBuilder()
+    known_write_skills = {
+        skill.name
+        for skill in request.app.state.orchestrator.registry._skills.values()
+        if getattr(skill, "side_effect", "read") == "write"
+    }
+    try:
+        preview = builder.from_text(payload.text, known_write_skills=known_write_skills)
+        return RuleFromTextResponse(ok=True, rule_preview=preview)
+    except Exception as exc:
+        return RuleFromTextResponse(ok=False, error=str(exc))
+
+
 @router.put("/{rule_id}", response_model=Rule)
 def update_rule(rule_id: str, payload: RuleCreate, request: Request) -> Rule:
     store = _store_from_request(request)
@@ -91,8 +118,6 @@ def delete_rule(rule_id: str, request: Request) -> dict[str, str]:
     return {"status": "deleted", "rule_id": rule_id}
 
 
-
-
 @router.post("/{rule_id}/reset-state", response_model=Rule)
 def reset_rule_state(rule_id: str, request: Request) -> Rule:
     store = _store_from_request(request)
@@ -109,6 +134,7 @@ def reset_rule_state(rule_id: str, request: Request) -> Rule:
         }
     )
     return store.upsert(existing.model_copy(update={"state": reset_state, "last_run_iso": None, "last_match_iso": None}))
+
 
 @router.post("/evaluate-now")
 def evaluate_now(request: Request) -> dict[str, list[dict]]:
