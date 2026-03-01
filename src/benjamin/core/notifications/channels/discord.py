@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import json
-from urllib import request
+import logging
+
+from benjamin.core.http.client import request_with_retry
+from benjamin.core.http.errors import BenjaminHTTPError
+
+logger = logging.getLogger(__name__)
 
 
 class DiscordWebhookNotifier:
@@ -12,12 +17,16 @@ class DiscordWebhookNotifier:
         content = f"**{title}**\n{body}"
         if meta:
             content += f"\nmeta: {json.dumps(meta, ensure_ascii=False)}"
-        payload = json.dumps({"content": content}).encode("utf-8")
-        req = request.Request(
-            self.webhook_url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with request.urlopen(req, timeout=5):
-            return
+        payload = {"content": content}
+        try:
+            request_with_retry(
+                "POST",
+                self.webhook_url,
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout_override=5.0,
+                retries=1,
+                redact_url=True,
+            )
+        except BenjaminHTTPError as exc:
+            logger.warning("Discord webhook send failed: %s", exc)

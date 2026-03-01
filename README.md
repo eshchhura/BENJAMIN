@@ -73,6 +73,13 @@ benjamin-worker
 - `BENJAMIN_AUTH_MODE`: API/UI auth mode (`off`/`token`, default `token`).
 - `BENJAMIN_AUTH_TOKEN`: required shared token when `BENJAMIN_AUTH_MODE=token`.
 - `BENJAMIN_EXPOSE_PUBLIC`: when `on`, `/chat` POST also requires auth token (default `off`).
+- `BENJAMIN_HTTP_TIMEOUT_S`: default total HTTP timeout in seconds for shared HTTP client calls (default `15.0`).
+- `BENJAMIN_HTTP_CONNECT_TIMEOUT_S`: default HTTP connect timeout in seconds (default `5.0`).
+- `BENJAMIN_HTTP_RETRIES`: default shared HTTP retry count for transient failures (default `2`).
+- `BENJAMIN_HTTP_BACKOFF_BASE_S`: base exponential backoff in seconds for retries (default `0.25`).
+- `BENJAMIN_HTTP_BACKOFF_MAX_S`: max retry backoff in seconds (default `2.0`).
+- `BENJAMIN_HTTP_USER_AGENT`: shared HTTP `User-Agent` header value (default `BENJAMIN/1.0`).
+- `BENJAMIN_PING_CACHE_TTL_S`: TTL in seconds for cached `/healthz/full` LLM reachability pings (default `10`).
 
 When auth mode is `token`, pass the token using either:
 - HTTP header: `X-BENJAMIN-TOKEN: <token>`
@@ -164,7 +171,11 @@ curl -X POST "http://localhost:8000/approvals/<APPROVAL_ID>/reject" \
 curl "http://localhost:8000/approvals"
 ```
 
+`/healthz/full` uses a short-timeout shared HTTP check against `.../v1/models` and caches LLM reachability for `BENJAMIN_PING_CACHE_TTL_S` seconds to keep endpoint latency stable.
+
 ## Integrations status
+
+`/healthz/full` performs a short-timeout OpenAI-compatible reachability check (`.../v1/models`) through the shared HTTP client and caches ping results for `BENJAMIN_PING_CACHE_TTL_S` seconds.
 
 ```bash
 curl "http://localhost:8000/integrations/status"
