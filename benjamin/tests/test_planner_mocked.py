@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from core.models.llm import LLMClient
-from core.orchestration.orchestrator import Orchestrator
-from core.orchestration.schemas import UserRequest
+from benjamin.core.models.llm import LLMClient
+from benjamin.core.orchestration.orchestrator import Orchestrator
+from benjamin.core.orchestration.schemas import UserRequest
 
 
 def test_planner_mocked_executes_filesystem_step(monkeypatch, tmp_path: Path) -> None:
