@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from benjamin.core.ledger.keys import approval_execution_key
+from benjamin.core.observability.query import build_correlation_view, search_runs
 from benjamin.core.orchestration.orchestrator import ChatRequest
 
 from .auth import AUTH_COOKIE, get_required_token, is_auth_enabled
@@ -210,24 +212,51 @@ def ui_memory_upsert(request: Request, key: str = Form(...), value: str = Form(.
 
 
 @router.get("/runs")
-def ui_runs(request: Request):
-    task_store = request.app.state.task_store
-    episodic = request.app.state.memory_manager.episodic.list_recent(limit=200)
+def ui_runs(
+    request: Request,
+    kind: str = Query(default="all"),
+    status: str = Query(default="all"),
+    q: str = Query(default=""),
+    limit: int = Query(default=50),
+):
+    normalized_kind = kind if kind in {"chat", "rule", "job", "approval", "all"} else "all"
+    normalized_status = status if status in {"ok", "failed", "skipped", "all"} else "all"
+    normalized_limit = max(1, min(200, limit))
 
-    rule_runs = [episode for episode in reversed(episodic) if episode.kind == "rule"][:20]
-    job_runs = [episode for episode in reversed(episodic) if episode.kind in {"briefing", "notification"}][:20]
-    approval_audits = [episode for episode in reversed(episodic) if episode.kind == "approval"][:20]
+    sections = search_runs(
+        kind=normalized_kind,
+        status=normalized_status,
+        q=q,
+        limit=normalized_limit,
+        task_store=request.app.state.task_store,
+        episodic_store=request.app.state.memory_manager.episodic,
+        ledger=request.app.state.approval_service.ledger,
+        approval_store=request.app.state.approval_service.store,
+    )
 
     return templates.TemplateResponse(
         "runs.html",
         {
             "request": request,
-            "tasks": task_store.list_recent(limit=50),
-            "rule_runs": rule_runs,
-            "job_runs": job_runs,
-            "approval_audits": approval_audits,
+            **sections,
+            "kind": normalized_kind,
+            "status": normalized_status,
+            "q": q,
+            "limit": normalized_limit,
         },
     )
+
+
+@router.get("/correlation/{correlation_id}")
+def ui_correlation_view(request: Request, correlation_id: str):
+    payload = build_correlation_view(
+        correlation_id,
+        task_store=request.app.state.task_store,
+        episodic_store=request.app.state.memory_manager.episodic,
+        ledger=request.app.state.approval_service.ledger,
+        approval_store=request.app.state.approval_service.store,
+    )
+    return templates.TemplateResponse("correlation.html", {"request": request, **payload})
 
 
 @router.get("/runs/chat/{task_id}")
@@ -252,9 +281,24 @@ def ui_run_approval_detail(request: Request, approval_id: str):
     record = request.app.state.approval_service.store.get(approval_id)
     if record is None:
         raise HTTPException(status_code=404, detail="approval not found")
+
+    idempotency_key = approval_execution_key(record.id, record.step)
+    timeline = [
+        ledger_record
+        for ledger_record in request.app.state.approval_service.ledger.search(idempotency_key, limit=50)
+        if ledger_record.key == idempotency_key
+    ]
+    correlation_id = str(record.requester.get("correlation_id") or "")
     return templates.TemplateResponse(
         "run_approval_detail.html",
-        {"request": request, "record": record, "record_json": json.dumps(record.model_dump(), indent=2, ensure_ascii=False)},
+        {
+            "request": request,
+            "record": record,
+            "record_json": json.dumps(record.model_dump(), indent=2, ensure_ascii=False),
+            "idempotency_key": idempotency_key,
+            "timeline": timeline,
+            "correlation_id": correlation_id,
+        },
     )
 
 

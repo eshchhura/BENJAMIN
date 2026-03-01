@@ -202,10 +202,12 @@ curl -X POST "http://localhost:8000/rules/<RULE_ID>/reset-state" \
 Open `http://localhost:8000/ui` to use the web UI for chat, approvals, jobs, rules, memory management, and run history.
 
 Run history dashboard and drilldowns:
-- `/ui/runs`: recent chat tasks, rule runs, job runs, and approval audits.
+- `/ui/runs`: run history with filters via `kind=chat|rule|job|approval|all`, `status=ok|failed|skipped|all`, `q=<text>`, and `limit=<1..200>`.
 - `/ui/runs/chat/{task_id}`: full plan/steps/trace for a chat run.
 - `/ui/runs/rules/{rule_id}`: rule definition plus recent episodes.
-- `/ui/runs/approvals/{approval_id}`: approval record detail.
+- `/ui/runs/approvals/{approval_id}`: approval record detail including idempotency key and ledger timeline.
+- `/ui/correlation/{correlation_id}`: correlation-centric view linking tasks, episodes, ledger records, and approvals.
+- `/runs/search`: JSON search endpoint for debugging and future UI integrations.
 
 ## Local GLM-4.7 (vLLM, single GPU)
 

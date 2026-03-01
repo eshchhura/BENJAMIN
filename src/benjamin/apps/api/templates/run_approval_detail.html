@@ -3,7 +3,26 @@
 <h2>Approval Detail</h2>
 <p><strong>Approval ID:</strong> {{ record.id }}</p>
 <p><strong>Status:</strong> {{ record.status }}</p>
-<p><strong>Correlation ID:</strong> {{ record.requester.get("correlation_id", "") }}</p>
+<p>
+  <strong>Correlation ID:</strong>
+  {% if correlation_id %}
+  <a href="/ui/correlation/{{ correlation_id }}">{{ correlation_id }}</a>
+  {% else %}
+  (none)
+  {% endif %}
+</p>
+<p><strong>Idempotency Key:</strong> {{ idempotency_key }}</p>
+
+<h3>Ledger Timeline</h3>
+{% if timeline %}
+<ul>
+  {% for item in timeline %}
+  <li>{{ item.ts_iso }} — {{ item.status }} — {{ item.key }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No ledger records found for this approval execution key.</p>
+{% endif %}
 
 <h3>Approval JSON</h3>
 <pre>{{ record_json }}</pre>

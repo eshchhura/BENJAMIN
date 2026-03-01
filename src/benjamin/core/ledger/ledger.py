@@ -69,9 +69,45 @@ class ExecutionLedger:
             )
             self.trim(self.max_records)
 
-    def list_recent(self, limit: int) -> list[LedgerRecord]:
+    def list_recent(self, limit: int = 50) -> list[LedgerRecord]:
         records = self._read_all_records()
         return records[-limit:] if limit > 0 else []
+
+    def find_by_correlation(self, correlation_id: str, limit: int = 200) -> list[LedgerRecord]:
+        if limit <= 0:
+            return []
+        matches: list[LedgerRecord] = []
+        for record in reversed(self._read_all_records()):
+            if record.correlation_id == correlation_id:
+                matches.append(record)
+            if len(matches) >= limit:
+                break
+        return list(reversed(matches))
+
+    def search(self, q: str, limit: int = 50) -> list[LedgerRecord]:
+        if limit <= 0:
+            return []
+        query = q.casefold().strip()
+        records = self._read_all_records()
+        if not query:
+            return records[-limit:]
+
+        matches: list[LedgerRecord] = []
+        for record in reversed(records):
+            haystack = " ".join(
+                [
+                    record.key,
+                    record.kind,
+                    record.status,
+                    record.correlation_id or "",
+                    json.dumps(record.meta, ensure_ascii=False),
+                ]
+            ).casefold()
+            if query in haystack:
+                matches.append(record)
+            if len(matches) >= limit:
+                break
+        return list(reversed(matches))
 
     def trim(self, max_records: int) -> None:
         if max_records <= 0:

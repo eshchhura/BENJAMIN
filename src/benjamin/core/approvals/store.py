@@ -54,6 +54,19 @@ class ApprovalStore:
                 return record
         return None
 
+    def find_by_correlation(self, correlation_id: str, limit: int = 200) -> list[PendingApproval]:
+        if limit <= 0:
+            return []
+        matches: list[PendingApproval] = []
+        for record in self.list_all():
+            requester_corr = str(record.requester.get("correlation_id", ""))
+            context_corr = str(record.context.get("correlation_id", ""))
+            if correlation_id in {requester_corr, context_corr}:
+                matches.append(record)
+            if len(matches) >= limit:
+                break
+        return matches
+
     def upsert(self, record: PendingApproval) -> None:
         records = self._load_all()
         updated = False

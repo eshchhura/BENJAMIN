@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Correlation View</h2>
+<p><strong>Correlation ID:</strong> {{ correlation_id }}</p>
+<p><a href="/ui/runs?q={{ correlation_id }}">Search in runs</a></p>
+
+<section>
+  <h3>Tasks</h3>
+  {% if tasks %}
+  <ul>
+    {% for task in tasks %}
+    <li><a href="/ui/runs/chat/{{ task.task_id }}">{{ task.task_id }}</a> — {{ task.ts_iso }} — {{ task.user_message }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No tasks tied to this correlation ID.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Approvals</h3>
+  {% if approvals %}
+  <ul>
+    {% for approval in approvals %}
+    <li><a href="/ui/runs/approvals/{{ approval.id }}">{{ approval.id }}</a> — {{ approval.status }} — {{ approval.step.skill_name }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No approvals tied to this correlation ID.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Ledger Records</h3>
+  {% if ledger_records %}
+  <table>
+    <thead><tr><th>Timestamp</th><th>Kind</th><th>Status</th><th>Key</th><th>Meta</th></tr></thead>
+    <tbody>
+      {% for record in ledger_records %}
+      <tr>
+        <td>{{ record.ts_iso }}</td>
+        <td>{{ record.kind }}</td>
+        <td>{{ record.status }}</td>
+        <td>{{ record.key }}</td>
+        <td>{{ record.meta }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No ledger records tied to this correlation ID.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Episodic Entries</h3>
+  {% if episodes %}
+  <table>
+    <thead><tr><th>Timestamp</th><th>Kind</th><th>Summary</th></tr></thead>
+    <tbody>
+      {% for episode in episodes %}
+      <tr><td>{{ episode.ts_iso }}</td><td>{{ episode.kind }}</td><td>{{ episode.summary }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No episodes tied to this correlation ID.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -45,6 +45,31 @@ class TaskStore:
         records = self._load_all()
         return list(reversed(records[-limit:]))
 
+    def search(self, q: str, limit: int = 50) -> list[TaskRecord]:
+        query = q.casefold().strip()
+        if limit <= 0:
+            return []
+
+        records = self._load_all()
+        if not query:
+            return list(reversed(records[-limit:]))
+
+        matches: list[TaskRecord] = []
+        for record in reversed(records):
+            haystack = " ".join(
+                [
+                    record.task_id,
+                    record.correlation_id,
+                    record.user_message,
+                    record.answer,
+                ]
+            ).casefold()
+            if query in haystack:
+                matches.append(record)
+            if len(matches) >= limit:
+                break
+        return matches
+
     def get(self, task_id: str) -> TaskRecord | None:
         for record in reversed(self._load_all()):
             if record.task_id == task_id:
