@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from benjamin.core.rules.evaluator import run_rules_evaluation
 from benjamin.core.rules.store import RuleStore
+from benjamin.core.observability.query import search_runs
 from benjamin.core.runs.store import TaskStore
 
 from .deps import (
@@ -112,6 +113,33 @@ def startup() -> None:
 @app.on_event("shutdown")
 def shutdown() -> None:
     get_scheduler_service().shutdown()
+
+
+@app.get("/runs/search")
+def runs_search(q: str = Query(default=""), limit: int = Query(default=50), kind: str = Query(default="all"), status: str = Query(default="all")) -> dict:
+    normalized_kind = kind if kind in {"chat", "rule", "job", "approval", "all"} else "all"
+    normalized_status = status if status in {"ok", "failed", "skipped", "all"} else "all"
+    normalized_limit = max(1, min(200, limit))
+    sections = search_runs(
+        kind=normalized_kind,
+        status=normalized_status,
+        q=q,
+        limit=normalized_limit,
+        task_store=app.state.task_store,
+        episodic_store=app.state.memory_manager.episodic,
+        ledger=app.state.approval_service.ledger,
+        approval_store=app.state.approval_service.store,
+    )
+    return {
+        "kind": normalized_kind,
+        "status": normalized_status,
+        "q": q,
+        "limit": normalized_limit,
+        **{
+            key: [item.model_dump() for item in values]
+            for key, values in sections.items()
+        },
+    }
 
 
 @app.get("/health")

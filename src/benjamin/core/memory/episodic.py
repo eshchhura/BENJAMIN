@@ -47,9 +47,11 @@ class EpisodicMemoryStore:
             return []
         return episodes[-limit:]
 
-    def search(self, text: str, limit: int) -> list[Episode]:
+    def search(self, text: str, limit: int = 50) -> list[Episode]:
         query = text.casefold().strip()
         episodes = self._load_all()
+        if limit <= 0:
+            return []
         if not query:
             return episodes[-limit:]
 
@@ -57,6 +59,18 @@ class EpisodicMemoryStore:
         for episode in reversed(episodes):
             haystack = " ".join([episode.kind, episode.summary, json.dumps(episode.meta, ensure_ascii=False)]).casefold()
             if query in haystack:
+                matches.append(episode)
+            if len(matches) >= limit:
+                break
+        return list(reversed(matches))
+
+    def find_by_correlation(self, correlation_id: str, limit: int = 200) -> list[Episode]:
+        if limit <= 0:
+            return []
+        episodes = self._load_all()
+        matches: list[Episode] = []
+        for episode in reversed(episodes):
+            if str(episode.meta.get("correlation_id", "")) == correlation_id:
                 matches.append(episode)
             if len(matches) >= limit:
                 break

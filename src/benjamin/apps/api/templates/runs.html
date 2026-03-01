@@ -2,6 +2,34 @@
 {% block content %}
 <h2>Run History</h2>
 
+<form method="get" action="/ui/runs" style="display:flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+  <label>
+    Kind
+    <select name="kind">
+      {% for value in ["all", "chat", "rule", "job", "approval"] %}
+      <option value="{{ value }}" {% if kind == value %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Status
+    <select name="status">
+      {% for value in ["all", "ok", "failed", "skipped"] %}
+      <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Search
+    <input type="text" name="q" value="{{ q }}" placeholder="task id, correlation, summary"/>
+  </label>
+  <label>
+    Limit
+    <input type="number" min="1" max="200" name="limit" value="{{ limit }}"/>
+  </label>
+  <button type="submit">Apply filters</button>
+</form>
+
 <section>
   <h3>Recent Chats</h3>
   {% if tasks %}
@@ -10,11 +38,14 @@
       <li>
         <a href="/ui/runs/chat/{{ task.task_id }}">{{ task.task_id }}</a>
         — {{ task.ts_iso }} — {{ task.user_message }}
+        {% if task.correlation_id %}
+        — correlation: <a href="/ui/correlation/{{ task.correlation_id }}">{{ task.correlation_id }}</a>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>No chat runs yet.</p>
+    <p>No chat runs.</p>
   {% endif %}
 </section>
 
@@ -30,11 +61,14 @@
         (unknown rule)
         {% endif %}
         — {{ run.ts_iso }} — {{ run.summary }}
+        {% if run.meta.get("correlation_id") %}
+        — correlation: <a href="/ui/correlation/{{ run.meta.get('correlation_id') }}">{{ run.meta.get("correlation_id") }}</a>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>No rule runs yet.</p>
+    <p>No rule runs.</p>
   {% endif %}
 </section>
 
@@ -43,11 +77,16 @@
   {% if job_runs %}
     <ul>
       {% for run in job_runs %}
-      <li>{{ run.ts_iso }} — {{ run.kind }} — {{ run.summary }}</li>
+      <li>
+        {{ run.ts_iso }} — {{ run.kind }} — {{ run.summary }}
+        {% if run.meta.get("correlation_id") %}
+        — correlation: <a href="/ui/correlation/{{ run.meta.get('correlation_id') }}">{{ run.meta.get("correlation_id") }}</a>
+        {% endif %}
+      </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>No job runs yet.</p>
+    <p>No job runs.</p>
   {% endif %}
 </section>
 
@@ -63,11 +102,50 @@
           (no approval id)
         {% endif %}
         — {{ run.ts_iso }} — {{ run.summary }}
+        {% if run.meta.get("correlation_id") %}
+        — correlation: <a href="/ui/correlation/{{ run.meta.get('correlation_id') }}">{{ run.meta.get("correlation_id") }}</a>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>No approval audit runs yet.</p>
+    <p>No approval audit runs.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Ledger Records</h3>
+  {% if ledger_records %}
+  <ul>
+    {% for record in ledger_records %}
+    <li>
+      {{ record.ts_iso }} — {{ record.kind }} — {{ record.status }} — {{ record.key }}
+      {% if record.correlation_id %}
+      — correlation: <a href="/ui/correlation/{{ record.correlation_id }}">{{ record.correlation_id }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No ledger records.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h3>Approvals</h3>
+  {% if approvals %}
+  <ul>
+    {% for approval in approvals %}
+    <li>
+      <a href="/ui/runs/approvals/{{ approval.id }}">{{ approval.id }}</a> — {{ approval.status }}
+      {% if approval.requester.get("correlation_id") %}
+      — correlation: <a href="/ui/correlation/{{ approval.requester.get('correlation_id') }}">{{ approval.requester.get("correlation_id") }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No approvals.</p>
   {% endif %}
 </section>
 {% endblock %}
