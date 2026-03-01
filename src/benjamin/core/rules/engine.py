@@ -12,7 +12,17 @@ from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep
 from benjamin.core.skills.registry import SkillRegistry
 
-from .schemas import Rule, RuleActionNotify, RuleActionProposeStep, RuleRunResult, now_iso
+from .schemas import (
+    PlannedActionNotify,
+    PlannedActionProposeStep,
+    Rule,
+    RuleActionNotify,
+    RuleActionProposeStep,
+    RuleMatchItem,
+    RuleRunResult,
+    RuleTestPreview,
+    now_iso,
+)
 
 
 class RuleEngine:
@@ -47,14 +57,11 @@ class RuleEngine:
                 self._sync_legacy_state(rule)
                 return RuleRunResult(rule_id=rule.id, ok=True, matched=False, match_count=0, notes=notes)
 
-            trigger_items = self._load_trigger_items(rule)
-            candidate_items = self._filter_new_items(rule, trigger_items)
-            matching_items = self._matching_items(rule, candidate_items)
+            trigger_items, candidate_items, matching_items, match_notes = self.compute_matches(rule)
             match_count = len(matching_items)
             matched = match_count > 0
 
-            notes.append(f"trigger_count={len(trigger_items)}")
-            notes.append(f"candidate_count={len(candidate_items)}")
+            notes.extend(match_notes)
 
             if matched:
                 executed_actions = 0
@@ -137,6 +144,87 @@ class RuleEngine:
                 meta={"rule_id": rule.id, "error": str(exc), "correlation_id": correlation_id},
             )
             return RuleRunResult(rule_id=rule.id, ok=False, matched=False, match_count=0, notes=notes, error=str(exc))
+
+    def evaluate_rule_preview(self, rule: Rule, ctx: dict | None = None, include_seen: bool = False) -> RuleTestPreview:
+        del ctx
+        now = datetime.now(timezone.utc)
+        trigger_items, candidate_items, matching_items, notes = self.compute_matches(rule, include_seen=include_seen)
+        match_count = len(matching_items)
+
+        if self._is_cooldown_active(rule, now):
+            notes.append("blocked_by_cooldown")
+            planned_actions: list[PlannedActionNotify | PlannedActionProposeStep] = []
+        else:
+            planned_actions = self.plan_actions(rule, matching_items, now_iso=now.isoformat(), notes=notes)
+
+        return RuleTestPreview(
+            rule_id=None if rule.id == "draft" else rule.id,
+            rule_name=rule.name,
+            matched=match_count > 0,
+            match_count=match_count,
+            candidate_count=len(candidate_items),
+            matching_items=[
+                RuleMatchItem(
+                    item_id=str(item.get("item_id") or ""),
+                    ts_iso=item.get("ts_iso"),
+                    text=str(item.get("text") or ""),
+                    raw=item.get("raw") or {},
+                )
+                for item in matching_items
+            ],
+            planned_actions=planned_actions,
+            notes=notes,
+        )
+
+    def compute_matches(self, rule: Rule, include_seen: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+        trigger_items = self._load_trigger_items(rule)
+        candidate_items = trigger_items if include_seen else self._filter_new_items(rule, trigger_items)
+        matching_items = self._matching_items(rule, candidate_items)
+        notes = [f"trigger_count={len(trigger_items)}", f"candidate_count={len(candidate_items)}"]
+        if include_seen:
+            notes.append("include_seen=true")
+        return trigger_items, candidate_items, matching_items, notes
+
+    def plan_actions(
+        self,
+        rule: Rule,
+        matching_items: list[dict[str, Any]],
+        now_iso: str,
+        notes: list[str] | None = None,
+    ) -> list[PlannedActionNotify | PlannedActionProposeStep]:
+        applied_notes = notes if notes is not None else []
+        planned_actions: list[PlannedActionNotify | PlannedActionProposeStep] = []
+        if not matching_items:
+            return planned_actions
+
+        for action in rule.actions:
+            if len(planned_actions) >= rule.max_actions_per_run:
+                applied_notes.append("action_cap_reached")
+                break
+            if isinstance(action, RuleActionNotify):
+                planned_actions.append(
+                    PlannedActionNotify(
+                        type="notify",
+                        title=action.title,
+                        body=self._render_notify(
+                            action.body_template,
+                            count=len(matching_items),
+                            matching_items=matching_items,
+                            now_iso=now_iso,
+                        ),
+                    )
+                )
+            elif isinstance(action, RuleActionProposeStep):
+                planned_actions.append(
+                    PlannedActionProposeStep(
+                        type="propose_step",
+                        skill_name=action.skill_name,
+                        args=action.args,
+                        rationale=action.rationale,
+                        would_create_approval=True,
+                    )
+                )
+        return planned_actions
 
     def _is_cooldown_active(self, rule: Rule, now: datetime) -> bool:
         if rule.cooldown_minutes <= 0 or not rule.state.cooldown_until_iso:

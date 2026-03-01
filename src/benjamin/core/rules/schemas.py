@@ -27,6 +27,41 @@ class RuleActionProposeStep(BaseModel):
 RuleAction = RuleActionNotify | RuleActionProposeStep
 
 
+class RuleMatchItem(BaseModel):
+    item_id: str
+    ts_iso: str | None = None
+    text: str
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlannedActionNotify(BaseModel):
+    type: Literal["notify"]
+    title: str
+    body: str
+
+
+class PlannedActionProposeStep(BaseModel):
+    type: Literal["propose_step"]
+    skill_name: str
+    args: dict[str, Any] = Field(default_factory=dict)
+    rationale: str
+    would_create_approval: bool = True
+
+
+RulePlannedAction = PlannedActionNotify | PlannedActionProposeStep
+
+
+class RuleTestPreview(BaseModel):
+    rule_id: str | None = None
+    rule_name: str | None = None
+    matched: bool
+    match_count: int
+    candidate_count: int
+    matching_items: list[RuleMatchItem] = Field(default_factory=list)
+    planned_actions: list[RulePlannedAction] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
 class RuleTrigger(BaseModel):
     type: Literal["schedule", "gmail", "calendar"]
     every_minutes: int = 5
