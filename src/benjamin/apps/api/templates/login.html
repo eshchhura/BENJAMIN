@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>BENJAMIN Login</title>
+  </head>
+  <body>
+    <main>
+      <h1>Login</h1>
+      {% if auth_enabled %}
+      <form method="post" action="/ui/login">
+        <label for="token">Token</label>
+        <input id="token" name="token" type="password" required />
+        <button type="submit">Login</button>
+      </form>
+      {% else %}
+      <p>Authentication is disabled.</p>
+      <form method="post" action="/ui/login">
+        <button type="submit">Continue</button>
+      </form>
+      {% endif %}
+      {% if error %}<p style="color: red;">{{ error }}</p>{% endif %}
+    </main>
+  </body>
+</html>

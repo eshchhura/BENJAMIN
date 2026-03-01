@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from benjamin.core.orchestration.orchestrator import ChatRequest
 
+from .auth import AUTH_COOKIE, get_required_token, is_auth_enabled
 from .routes_jobs import create_reminder, upsert_daily_briefing
 
 router = APIRouter()
@@ -17,6 +18,33 @@ templates = Jinja2Templates(directory="src/benjamin/apps/api/templates")
 @router.get("/")
 def ui_root() -> RedirectResponse:
     return RedirectResponse(url="/ui/chat", status_code=303)
+
+
+@router.get("/login")
+def ui_login(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": None, "auth_enabled": is_auth_enabled()})
+
+
+@router.post("/login")
+def ui_login_post(request: Request, token: str = Form(default="")):
+    if is_auth_enabled() and token != get_required_token():
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Invalid token", "auth_enabled": True},
+            status_code=401,
+        )
+
+    response = RedirectResponse(url="/ui/chat", status_code=303)
+    if is_auth_enabled():
+        response.set_cookie(AUTH_COOKIE, value=token, httponly=True, samesite="lax")
+    return response
+
+
+@router.post("/logout")
+def ui_logout() -> RedirectResponse:
+    response = RedirectResponse(url="/ui/login", status_code=303)
+    response.delete_cookie(AUTH_COOKIE)
+    return response
 
 
 @router.get("/chat")
