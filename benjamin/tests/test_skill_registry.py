@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 
-from core.orchestration.schemas import ContextPack
-from core.skills.base import Skill
-from core.skills.registry import SkillRegistry
+from benjamin.core.orchestration.schemas import ContextPack
+from benjamin.core.skills.base import Skill
+from benjamin.core.skills.registry import SkillRegistry
 
 
 class DummyIn(BaseModel):

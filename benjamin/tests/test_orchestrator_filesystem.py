@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from core.orchestration.orchestrator import Orchestrator
-from core.orchestration.schemas import UserRequest
+from benjamin.core.orchestration.orchestrator import Orchestrator
+from benjamin.core.orchestration.schemas import UserRequest
 
 
 def test_orchestrator_searches_filesystem(tmp_path: Path) -> None:
