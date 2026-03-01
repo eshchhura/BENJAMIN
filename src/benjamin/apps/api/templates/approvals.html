@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Approvals</h2>
+<table>
+  <tr><th>ID</th><th>Status</th><th>Step</th><th>Actions</th></tr>
+  {% for item in approvals %}
+  <tr>
+    <td>{{ item.id }}</td>
+    <td>{{ item.status }}</td>
+    <td>{{ item.step.skill_name }}</td>
+    <td>
+      {% if item.status == 'pending' %}
+      <form method="post" action="/ui/approvals/{{ item.id }}/approve"><button type="submit">Approve</button></form>
+      <form method="post" action="/ui/approvals/{{ item.id }}/reject"><button type="submit">Reject</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Jobs</h2>
+<ul>
+{% for job in jobs %}
+<li>{{ job.id }} — next: {{ job.next_run_time_iso }} — {{ job.trigger }}</li>
+{% endfor %}
+</ul>
+<h3>Create reminder</h3>
+<form method="post" action="/ui/jobs/reminder">
+  <input name="message" placeholder="Message" />
+  <input name="minutes_from_now" type="number" value="30" />
+  <button type="submit">Create reminder</button>
+</form>
+<h3>Daily briefing</h3>
+<form method="post" action="/ui/jobs/daily-briefing">
+  <input name="time_hhmm" value="09:00" />
+  <button type="submit">Set time</button>
+</form>
+{% endblock %}

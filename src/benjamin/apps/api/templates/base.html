@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>BENJAMIN Command Center</title>
+    <link rel="stylesheet" href="/ui/static/app.css" />
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  </head>
+  <body>
+    <header>
+      <h1>BENJAMIN Command Center</h1>
+      <nav>
+        <a href="/ui/chat">Chat</a>
+        <a href="/ui/approvals">Approvals</a>
+        <a href="/ui/jobs">Jobs</a>
+        <a href="/ui/rules">Rules</a>
+        <a href="/ui/memory">Memory</a>
+      </nav>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

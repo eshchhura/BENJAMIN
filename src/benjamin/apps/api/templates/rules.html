@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Rules</h2>
+<form method="post" action="/ui/rules/evaluate-now">
+  <button type="submit">Evaluate now</button>
+</form>
+<table>
+  <tr><th>Name</th><th>Trigger</th><th>Enabled</th><th>Last run</th><th>Actions</th></tr>
+  {% for rule in rules %}
+  <tr>
+    <td>{{ rule.name }}</td><td>{{ rule.trigger.type }}</td><td>{{ rule.enabled }}</td><td>{{ rule.last_run_iso }}</td>
+    <td>
+      {% if rule.enabled %}
+        <form method="post" action="/ui/rules/{{ rule.id }}/disable"><button type="submit">Disable</button></form>
+      {% else %}
+        <form method="post" action="/ui/rules/{{ rule.id }}/enable"><button type="submit">Enable</button></form>
+      {% endif %}
+      <form method="post" action="/ui/rules/{{ rule.id }}/delete"><button type="submit">Delete</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<h3>Create rule</h3>
+<form method="post" action="/ui/rules/create">
+  <input name="name" placeholder="Rule name" />
+  <select name="trigger_type">
+    <option value="schedule">schedule</option>
+    <option value="gmail">gmail</option>
+    <option value="calendar">calendar</option>
+  </select>
+  <input name="contains" placeholder="contains" />
+  <input name="action_title" placeholder="Notification title" />
+  <input name="action_body_template" value="Matched {{count}} top={{top1}} at {{now_iso}}" />
+  <button type="submit">Create</button>
+</form>
+{% if results %}
+<h3>Latest results</h3>
+<ul>{% for item in results %}<li>{{ item.rule_id }} matched={{ item.matched }} ok={{ item.ok }} notes={{ item.notes }}</li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}
