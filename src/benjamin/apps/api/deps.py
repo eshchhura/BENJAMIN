@@ -9,6 +9,7 @@ from benjamin.core.integrations.base import CalendarConnector, EmailConnector
 from benjamin.core.integrations.google_auth import GoogleDependencyError, GoogleTokenError
 from benjamin.core.integrations.google_calendar import GoogleCalendarConnector
 from benjamin.core.integrations.google_gmail import GoogleGmailConnector
+from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.notifications.notifier import NotificationRouter, build_notification_router
 from benjamin.core.orchestration.orchestrator import Orchestrator
@@ -18,6 +19,10 @@ from benjamin.core.scheduler.scheduler import SchedulerService
 @lru_cache(maxsize=1)
 def get_memory_manager() -> MemoryManager:
     return MemoryManager()
+
+
+def get_execution_ledger() -> ExecutionLedger:
+    return ExecutionLedger(state_dir=get_memory_manager().state_dir)
 
 
 def _google_enabled() -> bool:
@@ -58,6 +63,7 @@ def get_orchestrator() -> Orchestrator:
         scheduler_service=get_scheduler_service(),
         calendar_connector=get_calendar_connector(),
         email_connector=get_email_connector(),
+        ledger=get_execution_ledger(),
     )
 
 
@@ -78,4 +84,4 @@ def get_approval_store() -> ApprovalStore:
 
 @lru_cache(maxsize=1)
 def get_approval_service() -> ApprovalService:
-    return ApprovalService(store=get_approval_store(), memory_manager=get_memory_manager())
+    return ApprovalService(store=get_approval_store(), memory_manager=get_memory_manager(), ledger=get_execution_ledger())

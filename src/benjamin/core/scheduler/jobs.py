@@ -7,6 +7,8 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from benjamin.core.integrations.base import CalendarConnector, EmailConnector
+from benjamin.core.ledger.keys import job_run_key
+from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.notifications.notifier import NotificationRouter, build_notification_router
 from benjamin.core.summarize.summarizer import Summarizer
@@ -30,30 +32,58 @@ def _build_default_connectors(state_dir: str) -> tuple[CalendarConnector | None,
         return None, None
 
 
+def _ledger_for_state(state_dir: str) -> ExecutionLedger:
+    return ExecutionLedger(state_dir=Path(state_dir))
+
+
 def run_reminder(
     message: str,
     state_dir: str,
     job_id: str | None = None,
+    scheduled_run_iso: str | None = None,
     router: NotificationRouter | None = None,
 ) -> None:
     correlation_id = str(uuid4())
+    effective_job_id = job_id or "reminder"
+    ledger = _ledger_for_state(state_dir)
+    key = job_run_key(job_id=effective_job_id, scheduled_run_iso=scheduled_run_iso, extra={"message": message})
+    started = ledger.try_start(
+        key,
+        kind="job_run",
+        correlation_id=correlation_id,
+        meta={"job_id": effective_job_id, "scheduled_run_iso": scheduled_run_iso},
+    )
+
+    memory = _memory_manager_for_state(state_dir)
+    if not started:
+        memory.episodic.append(
+            kind="notification",
+            summary=f"Skipped duplicate reminder: {message}",
+            meta={"correlation_id": correlation_id, "job_id": effective_job_id, "skipped_idempotent": True},
+        )
+        return
+
     active_router = router or build_notification_router()
     notify_meta = {"correlation_id": correlation_id}
     if job_id:
         notify_meta["job_id"] = job_id
-    active_router.send(title="Reminder", body=message, meta=notify_meta)
-
-    memory = _memory_manager_for_state(state_dir)
-    memory.episodic.append(
-        kind="notification",
-        summary=f"Sent reminder: {message}",
-        meta=notify_meta,
-    )
+    try:
+        active_router.send(title="Reminder", body=message, meta=notify_meta)
+        memory.episodic.append(
+            kind="notification",
+            summary=f"Sent reminder: {message}",
+            meta=notify_meta,
+        )
+        ledger.mark(key, "succeeded")
+    except Exception as exc:
+        ledger.mark(key, "failed", meta_update={"error": str(exc)})
+        raise
 
 
 def run_daily_briefing(
     state_dir: str,
     job_id: str | None = None,
+    scheduled_run_iso: str | None = None,
     router: NotificationRouter | None = None,
     calendar_connector: CalendarConnector | None = None,
     email_connector: EmailConnector | None = None,
@@ -131,23 +161,45 @@ def run_daily_briefing(
             body = compressed
 
     correlation_id = str(uuid4())
+    effective_job_id = job_id or "daily-briefing"
+    ledger = _ledger_for_state(state_dir)
+    key = job_run_key(job_id=effective_job_id, scheduled_run_iso=scheduled_run_iso)
+    started = ledger.try_start(
+        key,
+        kind="job_run",
+        correlation_id=correlation_id,
+        meta={"job_id": effective_job_id, "scheduled_run_iso": scheduled_run_iso},
+    )
+    if not started:
+        memory.episodic.append(
+            kind="briefing",
+            summary="Skipped duplicate daily briefing",
+            meta={"job_id": job_id, "correlation_id": correlation_id, "skipped_idempotent": True},
+        )
+        return
+
     active_router = router or build_notification_router()
     notify_meta = {"correlation_id": correlation_id}
     if job_id:
         notify_meta["job_id"] = job_id
-    active_router.send(title="Daily Briefing", body=body, meta=notify_meta)
+    try:
+        active_router.send(title="Daily Briefing", body=body, meta=notify_meta)
 
-    memory.episodic.append(
-        kind="briefing",
-        summary="Sent daily briefing",
-        meta={
-            "job_id": job_id,
-            "correlation_id": correlation_id,
-            "items": {
-                "recent_events": [event.summary for event in recent_events],
-                "preferences": [f"{fact.key}:{fact.value}" for fact in preferences],
+        memory.episodic.append(
+            kind="briefing",
+            summary="Sent daily briefing",
+            meta={
+                "job_id": job_id,
+                "correlation_id": correlation_id,
+                "items": {
+                    "recent_events": [event.summary for event in recent_events],
+                    "preferences": [f"{fact.key}:{fact.value}" for fact in preferences],
+                },
+                "calendar_included": calendar_connector is not None,
+                "gmail_included": email_connector is not None,
             },
-            "calendar_included": calendar_connector is not None,
-            "gmail_included": email_connector is not None,
-        },
-    )
+        )
+        ledger.mark(key, "succeeded")
+    except Exception as exc:
+        ledger.mark(key, "failed", meta_update={"error": str(exc)})
+        raise

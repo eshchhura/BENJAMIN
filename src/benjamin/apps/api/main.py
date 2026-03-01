@@ -100,6 +100,7 @@ def startup() -> None:
             minutes=every_minutes,
             kwargs={
                 "state_dir": str(app.state.memory_manager.state_dir),
+                "job_id": "rules-evaluator",
                 "router": app.state.notification_router,
                 "calendar_connector": app.state.calendar_connector,
                 "email_connector": app.state.email_connector,

@@ -6,6 +6,8 @@ from uuid import uuid4
 from typing import Any
 
 from benjamin.core.approvals.service import ApprovalService
+from benjamin.core.ledger.keys import rule_action_key
+from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep
 from benjamin.core.skills.registry import SkillRegistry
@@ -22,6 +24,7 @@ class RuleEngine:
         notifier,
         email_connector=None,
         calendar_connector=None,
+        ledger: ExecutionLedger | None = None,
     ) -> None:
         self.memory_manager = memory_manager
         self.approval_service = approval_service
@@ -29,6 +32,7 @@ class RuleEngine:
         self.notifier = notifier
         self.email_connector = email_connector
         self.calendar_connector = calendar_connector
+        self.ledger = ledger or ExecutionLedger(memory_manager.state_dir)
 
     def evaluate_rule(self, rule: Rule, ctx: dict | None = None) -> RuleRunResult:
         correlation_id = str((ctx or {}).get("correlation_id") or uuid4())
@@ -54,7 +58,8 @@ class RuleEngine:
 
             if matched:
                 executed_actions = 0
-                for action in rule.actions:
+                first_item_id = matching_items[0].get("item_id") if matching_items else None
+                for action_index, action in enumerate(rule.actions):
                     if executed_actions >= rule.max_actions_per_run:
                         notes.append("action_cap_reached")
                         break
@@ -69,21 +74,47 @@ class RuleEngine:
                         notes.append("notify_sent")
                         executed_actions += 1
                     elif isinstance(action, RuleActionProposeStep):
+                        action_signature = {
+                            "skill_name": action.skill_name,
+                            "args": action.args,
+                            "rationale": action.rationale,
+                        }
+                        action_key = rule_action_key(
+                            rule_id=rule.id,
+                            action_index=action_index,
+                            item_id=first_item_id,
+                            signature=action_signature,
+                        )
+                        started = self.ledger.try_start(
+                            action_key,
+                            kind="rule_action",
+                            correlation_id=correlation_id,
+                            meta={"rule_id": rule.id, "item_id": first_item_id},
+                        )
+                        if not started:
+                            notes.append("deduped_by_ledger")
+                            continue
+
                         step = PlanStep(
                             description=f"Rule action for {action.skill_name}",
                             skill_name=action.skill_name,
                             args=json.dumps(action.args),
                             requires_approval=True,
                         )
-                        self.approval_service.create_pending(
-                            step=step,
-                            ctx=ContextPack(goal=f"Rule matched: {rule.name}", cwd=None),
-                            requester={"source": "rule", "rule_id": rule.id, "correlation_id": correlation_id},
-                            rationale=action.rationale,
-                            registry=self.registry,
-                        )
-                        notes.append("approval_created")
-                        executed_actions += 1
+                        try:
+                            approval = self.approval_service.create_pending(
+                                step=step,
+                                ctx=ContextPack(goal=f"Rule matched: {rule.name}", cwd=None),
+                                requester={"source": "rule", "rule_id": rule.id, "correlation_id": correlation_id},
+                                rationale=action.rationale,
+                                registry=self.registry,
+                            )
+                            self.ledger.mark(action_key, "succeeded", meta_update={"approval_id": approval.id})
+                            notes.append("approval_created")
+                            executed_actions += 1
+                        except Exception as exc:
+                            self.ledger.mark(action_key, "failed", meta_update={"error": str(exc)})
+                            raise
 
                 state.last_match_iso = now.isoformat()
                 if rule.cooldown_minutes > 0 and executed_actions > 0:

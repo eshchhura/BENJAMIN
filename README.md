@@ -48,6 +48,8 @@ benjamin-worker
 ## Configuration
 
 - `BENJAMIN_STATE_DIR`: directory for persisted state (`semantic.jsonl`, `episodic.jsonl`, `tasks.jsonl`, `jobs.sqlite`).
+- `BENJAMIN_LEDGER_MAX`: max retained execution ledger entries in `executions.jsonl` (default `5000`).
+- `BENJAMIN_LEDGER_LOCK_MODE`: execution ledger lock mode (`file`/`off`, default `file`).
 - `BENJAMIN_TASKS_MAX`: max retained chat task run records in `tasks.jsonl` (default `500`).
 - `BENJAMIN_MEMORY_AUTOWRITE`: automatic memory write policy switch (`on`/`off`, default `on`).
 - `BENJAMIN_NOTIFIER`: enabled channels (`console`, `discord`, or comma-separated like `console,discord`; default `console`).
@@ -119,6 +121,16 @@ Write skills (approval-gated):
 ## Plan Critic
 
 Before execution or approval creation, BENJAMIN runs a deterministic plan critic that validates and normalizes write-action arguments. If required details are missing or contradictory, it asks a clarification question instead of creating approvals or executing steps.
+
+## Idempotency and replay safety
+
+BENJAMIN writes an append-only execution ledger at `<BENJAMIN_STATE_DIR>/executions.jsonl` for side-effecting paths.
+
+- Approval execution uses a stable key (`approval_id + skill_name + canonical args`) so repeated approve calls do not execute write tools twice.
+- Scheduler jobs (reminders, daily briefing, rules evaluator) use job-run keys to best-effort skip duplicate notification sends in repeated invocations.
+- Rule `propose_step` actions use rule-action keys (`rule_id + action index + matched item + action signature`) to avoid duplicate approval creation across retries/restarts.
+
+Read-only deterministic work can still run; the ledger is focused on preventing duplicate side effects.
 
 ## Approval workflow (API-only)
 
