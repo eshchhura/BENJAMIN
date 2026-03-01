@@ -210,7 +210,30 @@ curl -X POST "http://localhost:8000/rules/evaluate-now" \
 # Reset a rule's evaluation state (cursor, seen IDs, cooldown, run/match timestamps)
 curl -X POST "http://localhost:8000/rules/<RULE_ID>/reset-state" \
   -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"
+
+# Dry-run test an existing rule without side effects
+curl -X POST "http://localhost:8000/rules/<RULE_ID>/test" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}"
+
+# Dry-run test a transient draft rule without saving it
+curl -X POST "http://localhost:8000/rules/test" \
+  -H "Content-Type: application/json" \
+  -H "X-BENJAMIN-TOKEN: ${BENJAMIN_AUTH_TOKEN}" \
+  -d '{"name":"draft inbox","trigger":{"type":"gmail","query":"label:inbox","max_results":5},"condition":{"contains":"invoice"},"actions":[{"type":"notify","title":"Preview","body_template":"Matched {{count}} top={{top1}}"}]}'
 ```
+
+## Testing Rules (Dry-Run)
+
+Use rule test mode when you want to verify matching behavior and action outputs safely.
+
+- UI:
+  - On `/ui/rules`, click **Test** on any existing rule row to render a match/action preview inline.
+  - In the create form, click **Test Draft** to preview the current draft without saving.
+- API:
+  - `POST /rules/{id}/test` previews an existing persisted rule.
+  - `POST /rules/test` previews a transient `RuleCreate` payload.
+
+Dry-run preview fetches trigger items and evaluates conditions exactly like normal execution, but it does **not** send notifications, create approvals, write to ledger, mutate rule state, or append episodic memory entries.
 
 ## Command Center UI
 

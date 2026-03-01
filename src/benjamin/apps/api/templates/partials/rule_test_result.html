@@ -1,0 +1,40 @@
+<div>
+  <strong>Matched:</strong> {{ preview.matched }}
+  <span>(matches={{ preview.match_count }}, candidates={{ preview.candidate_count }})</span>
+
+  {% if preview.matching_items %}
+    <h4>Matching items</h4>
+    <ul>
+      {% for item in preview.matching_items %}
+        <li><code>{{ item.item_id }}</code> — {{ item.text[:140] }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if preview.planned_actions %}
+    <h4>Planned actions</h4>
+    <ul>
+      {% for action in preview.planned_actions %}
+        {% if action.type == "notify" %}
+          <li><strong>notify</strong>: {{ action.title }}<br><pre>{{ action.body }}</pre></li>
+        {% elif action.type == "propose_step" %}
+          <li>
+            <strong>propose_step</strong>: {{ action.skill_name }}
+            <div>args: <code>{{ action.args }}</code></div>
+            <div>rationale: {{ action.rationale }}</div>
+            <div>would_create_approval: {{ action.would_create_approval }}</div>
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if preview.notes %}
+    <h4>Notes</h4>
+    <ul>
+      {% for note in preview.notes %}
+        <li>{{ note }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>

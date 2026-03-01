@@ -17,6 +17,12 @@
       {% endif %}
       <form method="post" action="/ui/rules/{{ rule.id }}/reset-state"><button type="submit">Reset</button></form>
       <form method="post" action="/ui/rules/{{ rule.id }}/delete"><button type="submit">Delete</button></form>
+      <button hx-post="/rules/{{ rule.id }}/test" hx-target="#test-result-{{ rule.id }}" hx-swap="innerHTML" type="button">Test</button>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="6">
+      <div id="test-result-{{ rule.id }}"></div>
     </td>
   </tr>
   {% endfor %}
@@ -29,7 +35,7 @@
 <pre id="rule-preview"></pre>
 
 <h3>Create rule</h3>
-<form method="post" action="/ui/rules/create">
+<form method="post" action="/ui/rules/create" id="create-rule-form">
   <input name="name" placeholder="Rule name" />
   <select name="trigger_type">
     <option value="schedule">schedule</option>
@@ -42,7 +48,17 @@
   <input name="action_title" placeholder="Notification title" />
   <input name="action_body_template" value="Matched {{count}} top={{top1}} at {{now_iso}}" />
   <button type="submit">Create</button>
+  <button
+    type="button"
+    hx-post="/rules/test"
+    hx-include="#create-rule-form"
+    hx-target="#test-draft-result"
+    hx-swap="innerHTML"
+  >
+    Test Draft
+  </button>
 </form>
+<div id="test-draft-result"></div>
 {% if results %}
 <h3>Latest results</h3>
 <ul>{% for item in results %}<li>{{ item.rule_id }} matched={{ item.matched }} ok={{ item.ok }} notes={{ item.notes }}</li>{% endfor %}</ul>
