@@ -58,6 +58,17 @@ def _google_token_path(state_dir: Path) -> Path:
     return state_dir / "google_token.json"
 
 
+def _state_dir_writable(state_dir: Path) -> bool:
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        probe = state_dir / ".write-check"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
+
 def _llm_base_url(provider: str) -> str:
     if provider == "vllm":
         url = os.getenv("BENJAMIN_VLLM_URL", "http://127.0.0.1:8001/v1/chat/completions")
@@ -254,7 +265,7 @@ def healthz_full() -> dict[str, object]:
         "retrieval": BenjaminLLM.feature_enabled("BENJAMIN_LLM_RETRIEVAL"),
     }
 
-    state_writable = os.access(state_dir, os.W_OK)
+    state_writable = _state_dir_writable(state_dir)
     payload: dict[str, object] = {
         "ok": True,
         "python": {"version": sys.version.split()[0]},
