@@ -138,17 +138,24 @@ If unavailable, briefing remains memory-only.
 
 ## Rules API examples
 
+Rules are deterministic and stateful. Each evaluation only considers **new** trigger items since the previous run by combining a timestamp cursor (`state.last_cursor_iso`) and dedupe IDs (`state.seen_ids`). This prevents duplicate notifications and repeated approval proposals across periodic evaluations and restarts.
+
+`cooldown_minutes` blocks repeated firing after a successful match, and `max_actions_per_run` caps how many actions execute in one evaluation pass.
+
 ```bash
 # List all rules
 curl "http://localhost:8000/rules"
 
-# Create deterministic gmail rule with notify action
+# Create deterministic gmail rule with notify action, cooldown, and action cap
 curl -X POST "http://localhost:8000/rules" \
   -H "Content-Type: application/json" \
-  -d '{"name":"important inbox","trigger":{"type":"gmail","query":"label:inbox newer_than:1d","max_results":5},"condition":{"contains":"invoice"},"actions":[{"type":"notify","title":"Inbox rule","body_template":"Matched {{count}} items top={{top1}} at {{now_iso}}"}]}'
+  -d '{"name":"important inbox","trigger":{"type":"gmail","query":"label:inbox newer_than:1d","max_results":5},"condition":{"contains":"invoice"},"actions":[{"type":"notify","title":"Inbox rule","body_template":"Matched {{count}} items top={{top1}} at {{now_iso}}"}],"cooldown_minutes":30,"max_actions_per_run":1}'
 
 # Evaluate enabled rules immediately
 curl -X POST "http://localhost:8000/rules/evaluate-now"
+
+# Reset a rule's evaluation state (cursor, seen IDs, cooldown, run/match timestamps)
+curl -X POST "http://localhost:8000/rules/<RULE_ID>/reset-state"
 ```
 
 ## Command Center UI

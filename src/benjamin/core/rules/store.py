@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .schemas import Rule, now_iso
+from .schemas import Rule, RuleState, now_iso
 
 
 class RuleStore:
@@ -21,16 +21,35 @@ class RuleStore:
                 if not line:
                     continue
                 try:
-                    records.append(Rule.model_validate(json.loads(line)))
+                    records.append(self._migrate_rule(Rule.model_validate(json.loads(line))))
                 except (json.JSONDecodeError, ValueError):
                     continue
         return records
+
+
+
+    def _migrate_rule(self, rule: Rule) -> Rule:
+        state = rule.state
+        updates: dict[str, object] = {}
+        if rule.last_run_iso and not state.last_run_iso:
+            state = state.model_copy(update={"last_run_iso": rule.last_run_iso})
+        if rule.last_match_iso and not state.last_match_iso:
+            state = state.model_copy(update={"last_match_iso": rule.last_match_iso})
+        if state.seen_ids_max <= 0:
+            state = state.model_copy(update={"seen_ids_max": RuleState().seen_ids_max})
+        if len(state.seen_ids) > state.seen_ids_max:
+            state = state.model_copy(update={"seen_ids": state.seen_ids[-state.seen_ids_max :]})
+        updates["state"] = state
+        updates["last_run_iso"] = state.last_run_iso
+        updates["last_match_iso"] = state.last_match_iso
+        return rule.model_copy(update=updates)
 
     def _write_all(self, rules: list[Rule]) -> None:
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         with self.file_path.open("w", encoding="utf-8") as handle:
             for rule in rules:
-                handle.write(json.dumps(rule.model_dump(), ensure_ascii=False) + "\n")
+                normalized = self._migrate_rule(rule)
+                handle.write(json.dumps(normalized.model_dump(), ensure_ascii=False) + "\n")
 
     def list_all(self) -> list[Rule]:
         return list(reversed(self._load_all()))
@@ -43,7 +62,8 @@ class RuleStore:
 
     def upsert(self, rule: Rule) -> Rule:
         rules = self._load_all()
-        updated = rule.model_copy(update={"updated_at_iso": now_iso()})
+        normalized = self._migrate_rule(rule)
+        updated = normalized.model_copy(update={"updated_at_iso": now_iso()})
         for idx, current in enumerate(rules):
             if current.id == updated.id:
                 rules[idx] = updated

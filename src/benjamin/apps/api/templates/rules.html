@@ -5,16 +5,17 @@
   <button type="submit">Evaluate now</button>
 </form>
 <table>
-  <tr><th>Name</th><th>Trigger</th><th>Enabled</th><th>Last run</th><th>Actions</th></tr>
+  <tr><th>Name</th><th>Trigger</th><th>Enabled</th><th>Last run</th><th>Cooldown</th><th>Actions</th></tr>
   {% for rule in rules %}
   <tr>
-    <td>{{ rule.name }}</td><td>{{ rule.trigger.type }}</td><td>{{ rule.enabled }}</td><td>{{ rule.last_run_iso }}</td>
+    <td>{{ rule.name }}</td><td>{{ rule.trigger.type }}</td><td>{{ rule.enabled }}</td><td>{{ rule.state.last_run_iso }}</td><td>{{ rule.state.cooldown_until_iso }}</td>
     <td>
       {% if rule.enabled %}
         <form method="post" action="/ui/rules/{{ rule.id }}/disable"><button type="submit">Disable</button></form>
       {% else %}
         <form method="post" action="/ui/rules/{{ rule.id }}/enable"><button type="submit">Enable</button></form>
       {% endif %}
+      <form method="post" action="/ui/rules/{{ rule.id }}/reset-state"><button type="submit">Reset</button></form>
       <form method="post" action="/ui/rules/{{ rule.id }}/delete"><button type="submit">Delete</button></form>
     </td>
   </tr>
@@ -29,6 +30,8 @@
     <option value="calendar">calendar</option>
   </select>
   <input name="contains" placeholder="contains" />
+  <input name="cooldown_minutes" type="number" value="0" min="0" placeholder="cooldown minutes" />
+  <input name="max_actions_per_run" type="number" value="3" min="1" placeholder="max actions per run" />
   <input name="action_title" placeholder="Notification title" />
   <input name="action_body_template" value="Matched {{count}} top={{top1}} at {{now_iso}}" />
   <button type="submit">Create</button>

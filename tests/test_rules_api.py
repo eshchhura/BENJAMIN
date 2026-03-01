@@ -21,6 +21,8 @@ def test_rules_create_and_list(tmp_path, monkeypatch) -> None:
         "trigger": {"type": "schedule", "every_minutes": 5},
         "condition": {"contains": "heartbeat"},
         "actions": [{"type": "notify", "title": "Rule", "body_template": "Matched {{count}}"}],
+        "cooldown_minutes": 5,
+        "max_actions_per_run": 2,
     }
 
     with TestClient(app) as client:
@@ -30,3 +32,6 @@ def test_rules_create_and_list(tmp_path, monkeypatch) -> None:
         assert listed.status_code == 200
         names = [item["name"] for item in listed.json()]
         assert "api rule" in names
+        created_payload = created.json()
+        assert created_payload["cooldown_minutes"] == 5
+        assert created_payload["max_actions_per_run"] == 2

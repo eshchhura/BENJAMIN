@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def now_iso() -> str:
@@ -40,6 +40,15 @@ class RuleCondition(BaseModel):
     not_contains: str | None = None
 
 
+class RuleState(BaseModel):
+    last_run_iso: str | None = None
+    last_match_iso: str | None = None
+    cooldown_until_iso: str | None = None
+    seen_ids: list[str] = Field(default_factory=list)
+    seen_ids_max: int = 200
+    last_cursor_iso: str | None = None
+
+
 class Rule(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
@@ -49,8 +58,24 @@ class Rule(BaseModel):
     trigger: RuleTrigger
     condition: RuleCondition = Field(default_factory=RuleCondition)
     actions: list[RuleAction] = Field(default_factory=list)
+    max_actions_per_run: int = 3
+    cooldown_minutes: int = 0
+    state: RuleState = Field(default_factory=RuleState)
+
+    # Deprecated top-level fields preserved for backward compatibility.
     last_run_iso: str | None = None
     last_match_iso: str | None = None
+
+    @model_validator(mode="after")
+    def migrate_legacy_state(self) -> "Rule":
+        state_updates: dict[str, str] = {}
+        if self.last_run_iso and not self.state.last_run_iso:
+            state_updates["last_run_iso"] = self.last_run_iso
+        if self.last_match_iso and not self.state.last_match_iso:
+            state_updates["last_match_iso"] = self.last_match_iso
+        if state_updates:
+            self.state = self.state.model_copy(update=state_updates)
+        return self
 
 
 class RuleCreate(BaseModel):
@@ -59,6 +84,8 @@ class RuleCreate(BaseModel):
     trigger: RuleTrigger
     condition: RuleCondition = Field(default_factory=RuleCondition)
     actions: list[RuleAction] = Field(default_factory=list)
+    max_actions_per_run: int = 3
+    cooldown_minutes: int = 0
 
 
 class RuleRunResult(BaseModel):

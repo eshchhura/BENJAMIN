@@ -10,7 +10,7 @@ from benjamin.core.notifications.notifier import NotificationRouter, build_notif
 from benjamin.core.orchestration.orchestrator import Orchestrator
 
 from .engine import RuleEngine
-from .schemas import RuleRunResult, now_iso
+from .schemas import RuleRunResult
 from .store import RuleStore
 
 
@@ -42,9 +42,6 @@ def run_rules_evaluation(
         if not rule.enabled:
             continue
         result = rule_engine.evaluate_rule(rule)
-        updates = {"last_run_iso": now_iso()}
-        if result.matched:
-            updates["last_match_iso"] = now_iso()
-        rule_store.upsert(rule.model_copy(update=updates))
+        rule_store.upsert(rule)
         results.append(result)
     return results
