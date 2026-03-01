@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from urllib import error, request
-
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +31,9 @@ from .routes_memory import router as memory_router
 from .routes_rules import router as rules_router
 from .routes_tasks import router as tasks_router
 from .routes_ui import router as ui_router
+from benjamin.core.cache.ttl import TTLCache
+from benjamin.core.http.client import request_with_retry
+from benjamin.core.http.errors import BenjaminHTTPError
 from benjamin.core.models.llm_provider import BenjaminLLM
 
 
@@ -66,21 +67,38 @@ def _llm_base_url(provider: str) -> str:
     return url.rstrip("/")
 
 
-def _llm_reachable(provider: str, timeout_s: float = 1.0) -> bool:
+
+
+_HEALTH_PING_CACHE = TTLCache(default_ttl_s=int(os.getenv("BENJAMIN_PING_CACHE_TTL_S", "10")))
+
+def _llm_reachable_uncached(provider: str, timeout_s: float = 1.0) -> bool:
     if provider not in {"vllm", "http"}:
         return False
     base_url = _llm_base_url(provider)
     if not base_url:
         return False
     endpoint = f"{base_url}/v1/models"
-    req = request.Request(endpoint, method="GET")
     try:
-        with request.urlopen(req, timeout=timeout_s) as response:  # nosec B310
-            return 200 <= response.status < 500
-    except (error.URLError, TimeoutError, ValueError):
+        response = request_with_retry(
+            "GET",
+            endpoint,
+            timeout_override=timeout_s,
+            retries=0,
+            allowed_statuses={200},
+            redact_url=True,
+        )
+        return response.status_code == 200
+    except BenjaminHTTPError:
         return False
-    except Exception:
+
+
+def _llm_reachable(provider: str, timeout_s: float = 1.0) -> bool:
+    base_url = _llm_base_url(provider)
+    if not base_url:
         return False
+    ttl_s = int(os.getenv("BENJAMIN_PING_CACHE_TTL_S", "10"))
+    cache_key = f"llm_ping:{provider}:{base_url}"
+    return bool(_HEALTH_PING_CACHE.get_or_set(cache_key, ttl_s, lambda: _llm_reachable_uncached(provider, timeout_s=timeout_s)))
 
 app = FastAPI(title="Benjamin API")
 app.mount("/ui/static", StaticFiles(directory="src/benjamin/apps/api/static"), name="ui-static")

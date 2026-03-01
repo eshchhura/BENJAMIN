@@ -4,9 +4,9 @@ import json
 import os
 from dataclasses import dataclass
 
-import httpx
-
 from .llm import LLM
+from benjamin.core.http.errors import BenjaminHTTPError
+
 from .llm_openai_compat import OpenAICompatClient
 
 
@@ -104,7 +104,7 @@ class BenjaminLLM:
                         response_format=response_format,
                     )
                 return self._legacy.complete(f"{system}\n\n{user}")
-            except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError) as exc:
+            except (BenjaminHTTPError, ValueError) as exc:
                 last_error = exc
                 continue
 
