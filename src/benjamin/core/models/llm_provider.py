@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from dataclasses import dataclass
 
-from .llm import LLM
 from benjamin.core.http.errors import BenjaminHTTPError
 
+from .llm import LLM
 from .llm_openai_compat import OpenAICompatClient
 
 
@@ -47,6 +49,7 @@ class BenjaminLLM:
             timeout_s=self.config.timeout_s,
         )
         self._legacy = LLM()
+        self.logger = logging.getLogger("benjamin.llm")
 
     @staticmethod
     def feature_enabled(name: str) -> bool:
@@ -57,7 +60,7 @@ class BenjaminLLM:
     def complete_text(self, system: str, user: str, max_tokens: int | None = None, temperature: float | None = None) -> str:
         used_tokens = max_tokens or self.config.max_tokens_text
         used_temp = self.config.temperature if temperature is None else temperature
-        return self._call(system=system, user=user, max_tokens=used_tokens, temperature=used_temp)
+        return self._call(system=system, user=user, max_tokens=used_tokens, temperature=used_temp, mode="text")
 
     def complete_json(self, system: str, user: str, schema_hint: dict | None = None, max_tokens: int | None = None) -> dict:
         used_tokens = max_tokens or self.config.max_tokens_json
@@ -73,6 +76,7 @@ class BenjaminLLM:
             max_tokens=used_tokens,
             temperature=0.0,
             response_format={"type": "json_object"} if self.config.provider in {"vllm", "http"} else None,
+            mode="json",
         )
         parsed = self._parse_json(raw)
         if parsed is None:
@@ -88,26 +92,58 @@ class BenjaminLLM:
         max_tokens: int,
         temperature: float,
         response_format: dict | None = None,
+        mode: str = "text",
     ) -> str:
         if self.config.provider == "off":
             raise LLMUnavailable("LLM provider is off")
 
+        start = time.perf_counter()
         last_error: Exception | None = None
         for _ in range(2):
             try:
                 if self.config.provider in {"vllm", "http"}:
-                    return self._compat.chat_completion(
+                    output = self._compat.chat_completion(
                         system=system,
                         user=user,
                         temperature=temperature,
                         max_tokens=max_tokens,
                         response_format=response_format,
                     )
-                return self._legacy.complete(f"{system}\n\n{user}")
+                else:
+                    output = self._legacy.complete(f"{system}\n\n{user}")
+                self.logger.info(
+                    "llm_call",
+                    extra={
+                        "extra_fields": {
+                            "provider": self.config.provider,
+                            "model": self.config.model,
+                            "mode": mode,
+                            "duration_ms": int((time.perf_counter() - start) * 1000),
+                            "ok": True,
+                            "system_len": len(system),
+                            "user_len": len(user),
+                        }
+                    },
+                )
+                return output
             except (BenjaminHTTPError, ValueError) as exc:
                 last_error = exc
                 continue
 
+        self.logger.info(
+            "llm_call",
+            extra={
+                "extra_fields": {
+                    "provider": self.config.provider,
+                    "model": self.config.model,
+                    "mode": mode,
+                    "duration_ms": int((time.perf_counter() - start) * 1000),
+                    "ok": False,
+                    "system_len": len(system),
+                    "user_len": len(user),
+                }
+            },
+        )
         raise LLMUnavailable(f"LLM request failed: {last_error}")
 
     def _parse_json(self, raw: str) -> dict | None:
