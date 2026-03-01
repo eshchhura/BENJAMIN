@@ -140,17 +140,20 @@ def search_runs(
         "rule_runs": [episode for episode in episodes if episode.kind == "rule"][:limit],
         "job_runs": [episode for episode in episodes if episode.kind in {"briefing", "notification", "job"}][:limit],
         "approval_audits": [episode for episode in episodes if episode.kind == "approval"][:limit],
+        "policy_audits": [episode for episode in episodes if episode.kind == "policy"][:limit],
         "ledger_records": ledger_records[:limit],
         "approvals": approvals[:limit],
     }
 
     if kind == "chat":
-        sections.update({"rule_runs": [], "job_runs": [], "approval_audits": [], "ledger_records": [], "approvals": []})
+        sections.update({"rule_runs": [], "job_runs": [], "approval_audits": [], "policy_audits": [], "ledger_records": [], "approvals": []})
     elif kind == "rule":
-        sections.update({"tasks": [], "job_runs": [], "approval_audits": [], "ledger_records": [], "approvals": []})
+        sections.update({"tasks": [], "job_runs": [], "approval_audits": [], "policy_audits": [], "ledger_records": [], "approvals": []})
     elif kind == "job":
-        sections.update({"tasks": [], "rule_runs": [], "approval_audits": [], "ledger_records": [], "approvals": []})
+        sections.update({"tasks": [], "rule_runs": [], "approval_audits": [], "policy_audits": [], "ledger_records": [], "approvals": []})
     elif kind == "approval":
-        sections.update({"tasks": [], "rule_runs": [], "job_runs": [], "ledger_records": []})
+        sections.update({"tasks": [], "rule_runs": [], "job_runs": [], "policy_audits": [], "ledger_records": []})
+    elif kind == "policy":
+        sections.update({"tasks": [], "rule_runs": [], "job_runs": [], "approval_audits": [], "ledger_records": [], "approvals": []})
 
     return sections

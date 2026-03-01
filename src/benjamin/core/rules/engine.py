@@ -13,6 +13,7 @@ from benjamin.core.logging.context import log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep
 from benjamin.core.security.policy import PermissionsPolicy
+from benjamin.core.security.audit import log_policy_event
 from benjamin.core.security.scopes import default_scopes_for_skill
 from benjamin.core.skills.registry import SkillRegistry
 
@@ -122,15 +123,50 @@ class RuleEngine:
                             requires_approval=True,
                         )
                         required_scopes = self._required_scopes_for_skill(action.skill_name)
-                        if not self.permissions_policy.can_rules_propose(required_scopes):
-                            self.ledger.mark(action_key, "failed", meta_update={"error": "rules_scope_blocked"})
+                        allowlist_ok, blocked_by_allowlist = self.permissions_policy.check_rules_allowlist(required_scopes)
+                        snapshot = self.permissions_policy.snapshot_model()
+                        if not allowlist_ok:
+                            self.ledger.mark(action_key, "failed", meta_update={"error": "rules_scope_blocked", "blocked_scopes": blocked_by_allowlist})
                             notes.append("rules_scope_blocked")
+                            log_policy_event(
+                                self.memory_manager,
+                                correlation_id=correlation_id,
+                                source="rule",
+                                decision="denied",
+                                skill_name=action.skill_name,
+                                required_scopes=required_scopes,
+                                snapshot=snapshot,
+                                reason="allowlist_blocked",
+                                extra_meta={"rule_id": rule.id},
+                            )
                             continue
                         scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(required_scopes)
                         if not scopes_ok:
                             self.ledger.mark(action_key, "failed", meta_update={"error": "policy_denied", "disabled_scopes": disabled_scopes})
                             notes.append("policy_denied")
+                            log_policy_event(
+                                self.memory_manager,
+                                correlation_id=correlation_id,
+                                source="rule",
+                                decision="denied",
+                                skill_name=action.skill_name,
+                                required_scopes=required_scopes,
+                                snapshot=snapshot,
+                                reason="scope_disabled",
+                                extra_meta={"rule_id": rule.id},
+                            )
                             continue
+                        log_policy_event(
+                            self.memory_manager,
+                            correlation_id=correlation_id,
+                            source="rule",
+                            decision="allowed",
+                            skill_name=action.skill_name,
+                            required_scopes=required_scopes,
+                            snapshot=snapshot,
+                            reason="allowed",
+                            extra_meta={"rule_id": rule.id},
+                        )
                         try:
                             approval = self.approval_service.create_pending(
                                 step=step,
@@ -243,12 +279,13 @@ class RuleEngine:
             elif isinstance(action, RuleActionProposeStep):
                 required_scopes = self._required_scopes_for_skill(action.skill_name)
                 blocked_reason = None
-                if not self.permissions_policy.can_rules_propose(required_scopes):
-                    blocked_reason = "rules_scope_blocked"
+                allowlist_ok, blocked_by_allowlist = self.permissions_policy.check_rules_allowlist(required_scopes)
+                if not allowlist_ok:
+                    blocked_reason = f"rule allowlist blocks: {', '.join(blocked_by_allowlist)}"
                 else:
                     scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(required_scopes)
                     if not scopes_ok:
-                        blocked_reason = f"policy_denied:{','.join(disabled_scopes)}"
+                        blocked_reason = f"scope disabled: {', '.join(disabled_scopes)}"
                 planned_actions.append(
                     PlannedActionProposeStep(
                         type="propose_step",

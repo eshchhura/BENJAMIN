@@ -10,13 +10,27 @@ from fastapi.templating import Jinja2Templates
 from benjamin.core.ledger.keys import approval_execution_key
 from benjamin.core.observability.query import build_correlation_view, search_runs
 from benjamin.core.orchestration.orchestrator import ChatRequest
+from benjamin.core.security.overrides import PolicyOverridesStore
 from benjamin.core.security.policy import PermissionsPolicy
+from benjamin.core.security.scopes import ALL_SCOPES
 
 from .auth import AUTH_COOKIE, get_required_token, is_auth_enabled
 from .routes_jobs import create_reminder, upsert_daily_briefing
 
 router = APIRouter()
 templates = Jinja2Templates(directory="src/benjamin/apps/api/templates")
+
+
+def _policy_snapshot_diff(before: dict, after: dict) -> dict[str, list[str] | bool]:
+    before_enabled = set((before or {}).get("scopes_enabled", []))
+    after_enabled = set((after or {}).get("scopes_enabled", []))
+    before_rules = set((before or {}).get("rules_allowed_scopes", []))
+    after_rules = set((after or {}).get("rules_allowed_scopes", []))
+    return {
+        "enabled_added": sorted(after_enabled - before_enabled),
+        "enabled_removed": sorted(before_enabled - after_enabled),
+        "rules_allowlist_changed": before_rules != after_rules,
+    }
 
 
 @router.get("/")
@@ -220,6 +234,36 @@ def ui_memory_upsert(request: Request, key: str = Form(...), value: str = Form(.
     return RedirectResponse(url="/ui/memory", status_code=303)
 
 
+@router.get("/scopes")
+def ui_scopes(request: Request):
+    store = PolicyOverridesStore(state_dir=request.app.state.memory_manager.state_dir)
+    policy = PermissionsPolicy(overrides_store=store)
+    snapshot = policy.snapshot_model()
+    return templates.TemplateResponse(
+        "scopes.html",
+        {
+            "request": request,
+            "all_scopes": ALL_SCOPES,
+            "snapshot": snapshot,
+            "enabled_set": set(snapshot.scopes_enabled),
+            "rules_set": set(snapshot.rules_allowed_scopes),
+        },
+    )
+
+
+@router.post("/scopes/save")
+def ui_scopes_save(request: Request, scopes_enabled: list[str] = Form(default_factory=list), rules_allowed_scopes: list[str] = Form(default_factory=list)):
+    store = PolicyOverridesStore(state_dir=request.app.state.memory_manager.state_dir)
+    policy = PermissionsPolicy(overrides_store=store)
+    if not policy.overrides_enabled:
+        raise HTTPException(status_code=409, detail="policy overrides are disabled (env controlled)")
+
+    validated_enabled = sorted({scope for scope in scopes_enabled if scope in ALL_SCOPES})
+    validated_rules = sorted({scope for scope in rules_allowed_scopes if scope in ALL_SCOPES})
+    store.save({"scopes_enabled": validated_enabled, "rules_allowed_scopes": validated_rules})
+    return RedirectResponse(url="/ui/scopes", status_code=303)
+
+
 @router.get("/runs")
 def ui_runs(
     request: Request,
@@ -228,7 +272,7 @@ def ui_runs(
     q: str = Query(default=""),
     limit: int = Query(default=50),
 ):
-    normalized_kind = kind if kind in {"chat", "rule", "job", "approval", "all"} else "all"
+    normalized_kind = kind if kind in {"chat", "rule", "job", "approval", "policy", "all"} else "all"
     normalized_status = status if status in {"ok", "failed", "skipped", "all"} else "all"
     normalized_limit = max(1, min(200, limit))
 
@@ -309,6 +353,7 @@ def ui_run_approval_detail(request: Request, approval_id: str):
             "timeline": timeline,
             "correlation_id": correlation_id,
             "is_scope_enabled": {scope: policy.is_scope_enabled(scope) for scope in record.required_scopes},
+            "policy_diff": _policy_snapshot_diff(record.policy_snapshot, record.policy_snapshot_at_approve),
         },
     )
 

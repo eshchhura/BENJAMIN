@@ -4,6 +4,7 @@ import json
 
 from benjamin.core.orchestration.policies import PolicyEngine
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep, StepResult
+from benjamin.core.security.audit import log_policy_event
 
 
 class Executor:
@@ -22,16 +23,55 @@ class Executor:
         force_execute_writes: bool = False,
     ) -> StepResult:
         if step.skill_name:
+            policy = self.policy_engine.permissions_policy.__class__()
             skill = registry.get(step.skill_name)
             required_scopes = self.policy_engine.required_scopes(skill)
-            scopes_ok, disabled_scopes = self.policy_engine.permissions_policy.check_scopes(required_scopes)
+            scopes_ok, disabled_scopes = policy.check_scopes(required_scopes)
+            correlation_id = str(requester.get("correlation_id") or "")
+            source = str(requester.get("source") or "chat")
             if not scopes_ok:
                 if trace is not None:
                     trace.emit(
                         "PolicyDenied",
-                        {"step_id": step.id, "skill_name": step.skill_name, "disabled_scopes": disabled_scopes},
+                        {
+                            "step_id": step.id,
+                            "skill_name": step.skill_name,
+                            "required_scopes": required_scopes,
+                            "decision_reason": "scope_disabled",
+                            "disabled_scopes": disabled_scopes,
+                            "policy_snapshot_summary": policy.snapshot(),
+                        },
                     )
+                log_policy_event(
+                    approval_service.memory_manager,
+                    correlation_id=correlation_id,
+                    source=source,
+                    decision="denied",
+                    skill_name=step.skill_name,
+                    required_scopes=required_scopes,
+                    snapshot=policy.snapshot_model(),
+                    reason="scope_disabled",
+                    extra_meta={
+                        "task_id": str(requester.get("task_id") or ""),
+                        "approval_id": str(requester.get("approval_id") or ""),
+                    },
+                )
                 return StepResult(step_id=step.id, ok=False, error=f"policy_denied:{','.join(disabled_scopes)}")
+
+            log_policy_event(
+                approval_service.memory_manager,
+                correlation_id=correlation_id,
+                source=source,
+                decision="allowed",
+                skill_name=step.skill_name,
+                required_scopes=required_scopes,
+                snapshot=policy.snapshot_model(),
+                reason="allowed",
+                extra_meta={
+                    "task_id": str(requester.get("task_id") or ""),
+                    "approval_id": str(requester.get("approval_id") or ""),
+                },
+            )
 
             requires_approval = self.policy_engine.requires_approval(skill, step_requires_approval=step.requires_approval)
             if requires_approval and not force_execute_writes:

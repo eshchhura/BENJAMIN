@@ -16,6 +16,7 @@ from benjamin.core.logging.context import correlation_id_var, log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.planner import Plan
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep, StepResult
+from benjamin.core.security.audit import log_policy_event
 from benjamin.core.security.policy import PermissionsPolicy
 from benjamin.core.security.scopes import default_scopes_for_skill
 from benjamin.core.skills.registry import SkillRegistry
@@ -50,10 +51,11 @@ class ApprovalService:
         if getattr(skill, "side_effect", "read") != "write":
             raise ValueError("approval can only be created for write skills")
 
+        active_policy = PermissionsPolicy()
         scopes = list(required_scopes or getattr(skill, "required_scopes", []) or [])
         if not scopes:
             scopes = default_scopes_for_skill(skill.name, getattr(skill, "side_effect", "read"))
-        scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(scopes)
+        scopes_ok, disabled_scopes = active_policy.check_scopes(scopes)
         if not scopes_ok:
             raise ValueError(f"policy_denied:{','.join(disabled_scopes)}")
 
@@ -72,7 +74,7 @@ class ApprovalService:
             context={"cwd": ctx.cwd, "goal": ctx.goal},
             rationale=rationale,
             required_scopes=scopes,
-            policy_snapshot={"enabled": scopes_ok, "disabled_scopes": disabled_scopes},
+            policy_snapshot=active_policy.snapshot(),
         )
         self.store.upsert(record)
         return record
@@ -105,19 +107,44 @@ class ApprovalService:
             raise HTTPException(status_code=400, detail="approval expired")
 
         active_policy = PermissionsPolicy()
+        record.policy_snapshot_at_approve = active_policy.snapshot()
         scopes_ok, disabled_scopes = active_policy.check_scopes(record.required_scopes)
+        correlation_id = str(record.requester.get("correlation_id") or correlation_id_var.get() or uuid4())
         if not scopes_ok:
             record.status = "rejected"
-            record.error = f"policy_denied:{','.join(disabled_scopes)}"
+            remediation = "Policy denied at approval time. Required scopes are disabled. Go to /ui/scopes or use POST /v1/security/scopes/enable."
+            record.error = f"policy_denied:{','.join(disabled_scopes)} | {remediation}"
             self.memory_manager.episodic.append(
                 kind="approval",
                 summary=f"Rejected {record.step.skill_name} due to policy",
-                meta={"approval_id": record.id, "step_id": record.step.id, "disabled_scopes": disabled_scopes},
+                meta={"approval_id": record.id, "step_id": record.step.id, "disabled_scopes": disabled_scopes, "correlation_id": correlation_id},
+            )
+            log_policy_event(
+                self.memory_manager,
+                correlation_id=correlation_id,
+                source="approval",
+                decision="denied",
+                skill_name=record.step.skill_name or "unknown",
+                required_scopes=record.required_scopes,
+                snapshot=active_policy.snapshot_model(),
+                reason="scope_disabled",
+                extra_meta={"approval_id": record.id, "task_id": str(record.requester.get("task_id") or "")},
             )
             self._persist_or_clean(record)
-            raise HTTPException(status_code=400, detail="policy_denied")
+            raise HTTPException(status_code=400, detail=record.error)
 
-        correlation_id = str(record.requester.get("correlation_id") or correlation_id_var.get() or uuid4())
+        log_policy_event(
+            self.memory_manager,
+            correlation_id=correlation_id,
+            source="approval",
+            decision="allowed",
+            skill_name=record.step.skill_name or "unknown",
+            required_scopes=record.required_scopes,
+            snapshot=active_policy.snapshot_model(),
+            reason="allowed",
+            extra_meta={"approval_id": record.id, "task_id": str(record.requester.get("task_id") or "")},
+        )
+
         started_at = time.perf_counter()
         with log_context(correlation_id=correlation_id, approval_id=record.id):
             self.logger.info("approval_exec_started")
@@ -158,20 +185,15 @@ class ApprovalService:
                 return record
 
             context = ContextPack(goal=record.context.get("goal", "approved execution"), cwd=record.context.get("cwd"))
-            try:
-                result = executor.execute_plan(
-                    Plan(goal=context.goal, steps=[record.step]),
-                    context=context,
-                    registry=registry,
-                    trace=None,
-                    approval_service=self,
-                    requester={"source": "approval", "approval_id": record.id, "approver_note": approver_note, "correlation_id": correlation_id},
-                    force_execute_writes=True,
-                )[0]
-            except Exception as exc:
-                self.ledger.mark(execution_key, "failed", meta_update={"error": str(exc)})
-                self.logger.exception("approval_exec_completed", extra={"extra_fields": {"status": "failed"}})
-                raise
+            result = executor.execute_plan(
+                Plan(goal=context.goal, steps=[record.step]),
+                context=context,
+                registry=registry,
+                trace=None,
+                approval_service=self,
+                requester={"source": "approval", "approval_id": record.id, "approver_note": approver_note, "correlation_id": correlation_id},
+                force_execute_writes=True,
+            )[0]
 
             if result.ok:
                 self.ledger.mark(execution_key, "succeeded")
