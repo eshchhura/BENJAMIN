@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from benjamin.core.ledger.keys import approval_execution_key
 from benjamin.core.observability.query import build_correlation_view, search_runs
 from benjamin.core.orchestration.orchestrator import ChatRequest
+from benjamin.core.security.policy import PermissionsPolicy
 
 from .auth import AUTH_COOKIE, get_required_token, is_auth_enabled
 from .routes_jobs import create_reminder, upsert_daily_briefing
@@ -66,7 +67,15 @@ def ui_approvals(request: Request):
     service = request.app.state.approval_service
     service.cleanup_expired()
     approvals = service.store.list_all()
-    return templates.TemplateResponse("approvals.html", {"request": request, "approvals": approvals})
+    policy = PermissionsPolicy()
+    return templates.TemplateResponse(
+        "approvals.html",
+        {
+            "request": request,
+            "approvals": approvals,
+            "is_scope_enabled": {scope: policy.is_scope_enabled(scope) for approval in approvals for scope in approval.required_scopes},
+        },
+    )
 
 
 @router.post("/approvals/{approval_id}/approve")
@@ -289,6 +298,7 @@ def ui_run_approval_detail(request: Request, approval_id: str):
         if ledger_record.key == idempotency_key
     ]
     correlation_id = str(record.requester.get("correlation_id") or "")
+    policy = PermissionsPolicy()
     return templates.TemplateResponse(
         "run_approval_detail.html",
         {
@@ -298,6 +308,7 @@ def ui_run_approval_detail(request: Request, approval_id: str):
             "idempotency_key": idempotency_key,
             "timeline": timeline,
             "correlation_id": correlation_id,
+            "is_scope_enabled": {scope: policy.is_scope_enabled(scope) for scope in record.required_scopes},
         },
     )
 

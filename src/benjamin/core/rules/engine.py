@@ -12,6 +12,8 @@ from benjamin.core.ledger.ledger import ExecutionLedger
 from benjamin.core.logging.context import log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep
+from benjamin.core.security.policy import PermissionsPolicy
+from benjamin.core.security.scopes import default_scopes_for_skill
 from benjamin.core.skills.registry import SkillRegistry
 
 from .schemas import (
@@ -48,6 +50,7 @@ class RuleEngine:
         self.email_connector = email_connector
         self.calendar_connector = calendar_connector
         self.ledger = ledger or ExecutionLedger(memory_manager.state_dir)
+        self.permissions_policy = PermissionsPolicy()
 
     def evaluate_rule(self, rule: Rule, ctx: dict | None = None) -> RuleRunResult:
         correlation_id = str((ctx or {}).get("correlation_id") or uuid4())
@@ -118,6 +121,16 @@ class RuleEngine:
                             args=json.dumps(action.args),
                             requires_approval=True,
                         )
+                        required_scopes = self._required_scopes_for_skill(action.skill_name)
+                        if not self.permissions_policy.can_rules_propose(required_scopes):
+                            self.ledger.mark(action_key, "failed", meta_update={"error": "rules_scope_blocked"})
+                            notes.append("rules_scope_blocked")
+                            continue
+                        scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(required_scopes)
+                        if not scopes_ok:
+                            self.ledger.mark(action_key, "failed", meta_update={"error": "policy_denied", "disabled_scopes": disabled_scopes})
+                            notes.append("policy_denied")
+                            continue
                         try:
                             approval = self.approval_service.create_pending(
                                 step=step,
@@ -125,6 +138,7 @@ class RuleEngine:
                                 requester={"source": "rule", "rule_id": rule.id, "correlation_id": correlation_id},
                                 rationale=action.rationale,
                                 registry=self.registry,
+                                required_scopes=required_scopes,
                             )
                             self.ledger.mark(action_key, "succeeded", meta_update={"approval_id": approval.id})
                             notes.append("approval_created")
@@ -227,16 +241,37 @@ class RuleEngine:
                     )
                 )
             elif isinstance(action, RuleActionProposeStep):
+                required_scopes = self._required_scopes_for_skill(action.skill_name)
+                blocked_reason = None
+                if not self.permissions_policy.can_rules_propose(required_scopes):
+                    blocked_reason = "rules_scope_blocked"
+                else:
+                    scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(required_scopes)
+                    if not scopes_ok:
+                        blocked_reason = f"policy_denied:{','.join(disabled_scopes)}"
                 planned_actions.append(
                     PlannedActionProposeStep(
                         type="propose_step",
                         skill_name=action.skill_name,
                         args=action.args,
                         rationale=action.rationale,
-                        would_create_approval=True,
+                        would_create_approval=blocked_reason is None,
+                        required_scopes=required_scopes,
+                        blocked=blocked_reason is not None,
+                        blocked_reason=blocked_reason,
                     )
                 )
         return planned_actions
+
+    def _required_scopes_for_skill(self, skill_name: str) -> list[str]:
+        try:
+            skill = self.registry.get(skill_name)
+            scopes = list(getattr(skill, "required_scopes", []) or [])
+            if scopes:
+                return scopes
+            return default_scopes_for_skill(skill_name, getattr(skill, "side_effect", "read"))
+        except KeyError:
+            return default_scopes_for_skill(skill_name, "write")
 
     def _is_cooldown_active(self, rule: Rule, now: datetime) -> bool:
         if rule.cooldown_minutes <= 0 or not rule.state.cooldown_until_iso:

@@ -13,6 +13,17 @@
 </p>
 <p><strong>Idempotency Key:</strong> {{ idempotency_key }}</p>
 
+<h3>Required Scopes</h3>
+{% if record.required_scopes %}
+<ul>
+  {% for scope in record.required_scopes %}
+  <li>{{ scope }} ({{ "enabled" if is_scope_enabled.get(scope) else "disabled" }})</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>None</p>
+{% endif %}
+
 <h3>Ledger Timeline</h3>
 {% if timeline %}
 <ul>

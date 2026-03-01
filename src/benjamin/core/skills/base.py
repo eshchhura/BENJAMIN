@@ -9,5 +9,7 @@ class SkillResult:
 
 class Skill(Protocol):
     name: str
+    side_effect: str
+    required_scopes: list[str]
 
     def run(self, query: str) -> SkillResult: ...

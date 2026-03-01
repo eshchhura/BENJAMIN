@@ -16,22 +16,46 @@ from benjamin.core.logging.context import correlation_id_var, log_context
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.orchestration.planner import Plan
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep, StepResult
+from benjamin.core.security.policy import PermissionsPolicy
+from benjamin.core.security.scopes import default_scopes_for_skill
 from benjamin.core.skills.registry import SkillRegistry
 
 
 class ApprovalService:
-    def __init__(self, store: ApprovalStore, memory_manager: MemoryManager, ledger: ExecutionLedger | None = None) -> None:
+    def __init__(
+        self,
+        store: ApprovalStore,
+        memory_manager: MemoryManager,
+        ledger: ExecutionLedger | None = None,
+        permissions_policy: PermissionsPolicy | None = None,
+    ) -> None:
         self.store = store
         self.memory_manager = memory_manager
         self.ledger = ledger or ExecutionLedger(memory_manager.state_dir)
         self.logger = logging.getLogger("benjamin.approvals")
+        self.permissions_policy = permissions_policy or PermissionsPolicy()
 
-    def create_pending(self, step: PlanStep, ctx: ContextPack, requester: dict, rationale: str, registry: SkillRegistry) -> PendingApproval:
+    def create_pending(
+        self,
+        step: PlanStep,
+        ctx: ContextPack,
+        requester: dict,
+        rationale: str,
+        registry: SkillRegistry,
+        required_scopes: list[str] | None = None,
+    ) -> PendingApproval:
         if not step.skill_name:
             raise ValueError("approval requires a skill step")
         skill = registry.get(step.skill_name)
         if getattr(skill, "side_effect", "read") != "write":
             raise ValueError("approval can only be created for write skills")
+
+        scopes = list(required_scopes or getattr(skill, "required_scopes", []) or [])
+        if not scopes:
+            scopes = default_scopes_for_skill(skill.name, getattr(skill, "side_effect", "read"))
+        scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(scopes)
+        if not scopes_ok:
+            raise ValueError(f"policy_denied:{','.join(disabled_scopes)}")
 
         created_at = datetime.now(timezone.utc)
         ttl_hours = int(os.getenv("BENJAMIN_APPROVALS_TTL_HOURS", "72"))
@@ -47,6 +71,8 @@ class ApprovalService:
             step=step,
             context={"cwd": ctx.cwd, "goal": ctx.goal},
             rationale=rationale,
+            required_scopes=scopes,
+            policy_snapshot={"enabled": scopes_ok, "disabled_scopes": disabled_scopes},
         )
         self.store.upsert(record)
         return record
@@ -77,6 +103,19 @@ class ApprovalService:
             record.error = "approval expired"
             self._persist_or_clean(record)
             raise HTTPException(status_code=400, detail="approval expired")
+
+        active_policy = PermissionsPolicy()
+        scopes_ok, disabled_scopes = active_policy.check_scopes(record.required_scopes)
+        if not scopes_ok:
+            record.status = "rejected"
+            record.error = f"policy_denied:{','.join(disabled_scopes)}"
+            self.memory_manager.episodic.append(
+                kind="approval",
+                summary=f"Rejected {record.step.skill_name} due to policy",
+                meta={"approval_id": record.id, "step_id": record.step.id, "disabled_scopes": disabled_scopes},
+            )
+            self._persist_or_clean(record)
+            raise HTTPException(status_code=400, detail="policy_denied")
 
         correlation_id = str(record.requester.get("correlation_id") or correlation_id_var.get() or uuid4())
         started_at = time.perf_counter()
