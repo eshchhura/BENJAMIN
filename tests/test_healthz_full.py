@@ -53,6 +53,26 @@ def test_healthz_full_defaults(tmp_path, monkeypatch) -> None:
     assert "daily_briefing_enabled" in payload["scheduler"]
 
 
+def test_healthz_full_creates_state_dir_when_missing(tmp_path, monkeypatch) -> None:
+    state_dir = tmp_path / "nested" / "state"
+    monkeypatch.setenv("BENJAMIN_STATE_DIR", str(state_dir))
+    monkeypatch.setenv("BENJAMIN_AUTH_MODE", "off")
+    monkeypatch.setenv("BENJAMIN_LLM_PROVIDER", "off")
+    monkeypatch.setenv("BENJAMIN_GOOGLE_ENABLED", "off")
+
+    _clear_dependency_caches()
+
+    with TestClient(app) as client:
+        response = client.get("/healthz/full")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["state_dir"]["path"] == str(state_dir)
+    assert payload["state_dir"]["writable"] is True
+    assert state_dir.exists()
+
+
 def test_healthz_full_vllm_unreachable_is_fast(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("BENJAMIN_STATE_DIR", str(tmp_path))
     monkeypatch.setenv("BENJAMIN_AUTH_MODE", "off")
