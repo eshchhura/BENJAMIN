@@ -6,7 +6,10 @@ import os
 import time
 from dataclasses import dataclass
 
-from benjamin.core.http.errors import BenjaminHTTPError
+from benjamin.core.infra.breaker_manager import BreakerManager, ServiceDegradedError
+from benjamin.core.memory.manager import MemoryManager
+from benjamin.core.net.http import HTTPRequestError
+from benjamin.core.observability.trace import Trace
 
 from .llm import LLM
 from .llm_openai_compat import OpenAICompatClient
@@ -32,7 +35,7 @@ class LLMConfig:
 
 
 class BenjaminLLM:
-    def __init__(self) -> None:
+    def __init__(self, breaker_manager: BreakerManager | None = None) -> None:
         provider = os.getenv("BENJAMIN_LLM_PROVIDER", "off").casefold()
         self.config = LLMConfig(
             provider=provider,
@@ -50,6 +53,7 @@ class BenjaminLLM:
         )
         self._legacy = LLM()
         self.logger = logging.getLogger("benjamin.llm")
+        self.breaker_manager = breaker_manager or BreakerManager(state_dir=MemoryManager().state_dir)
 
     @staticmethod
     def feature_enabled(name: str) -> bool:
@@ -57,12 +61,12 @@ class BenjaminLLM:
         default = "on" if provider != "off" else "off"
         return os.getenv(name, default).casefold() == "on"
 
-    def complete_text(self, system: str, user: str, max_tokens: int | None = None, temperature: float | None = None) -> str:
+    def complete_text(self, system: str, user: str, max_tokens: int | None = None, temperature: float | None = None, trace: Trace | None = None) -> str:
         used_tokens = max_tokens or self.config.max_tokens_text
         used_temp = self.config.temperature if temperature is None else temperature
-        return self._call(system=system, user=user, max_tokens=used_tokens, temperature=used_temp, mode="text")
+        return self._call(system=system, user=user, max_tokens=used_tokens, temperature=used_temp, mode="text", trace=trace)
 
-    def complete_json(self, system: str, user: str, schema_hint: dict | None = None, max_tokens: int | None = None) -> dict:
+    def complete_json(self, system: str, user: str, schema_hint: dict | None = None, max_tokens: int | None = None, trace: Trace | None = None) -> dict:
         used_tokens = max_tokens or self.config.max_tokens_json
         strict_instruction = (
             "Return strict JSON only with no markdown fences and no prose."
@@ -77,6 +81,7 @@ class BenjaminLLM:
             temperature=0.0,
             response_format={"type": "json_object"} if self.config.provider in {"vllm", "http"} else None,
             mode="json",
+            trace=trace,
         )
         parsed = self._parse_json(raw)
         if parsed is None:
@@ -93,6 +98,7 @@ class BenjaminLLM:
         temperature: float,
         response_format: dict | None = None,
         mode: str = "text",
+        trace: Trace | None = None,
     ) -> str:
         if self.config.provider == "off":
             raise LLMUnavailable("LLM provider is off")
@@ -102,12 +108,15 @@ class BenjaminLLM:
         for _ in range(2):
             try:
                 if self.config.provider in {"vllm", "http"}:
-                    output = self._compat.chat_completion(
-                        system=system,
-                        user=user,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        response_format=response_format,
+                    output = self.breaker_manager.wrap(
+                        "llm",
+                        lambda: self._compat.chat_completion(
+                            system=system,
+                            user=user,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            response_format=response_format,
+                        ),
                     )
                 else:
                     output = self._legacy.complete(f"{system}\n\n{user}")
@@ -126,7 +135,11 @@ class BenjaminLLM:
                     },
                 )
                 return output
-            except (BenjaminHTTPError, ValueError) as exc:
+            except ServiceDegradedError as exc:
+                if trace is not None:
+                    trace.emit("LLMDegraded", {"service": "llm", "reason": str(exc)})
+                raise LLMUnavailable(str(exc)) from exc
+            except (HTTPRequestError, ValueError, RuntimeError) as exc:
                 last_error = exc
                 continue
 

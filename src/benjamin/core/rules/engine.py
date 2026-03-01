@@ -16,6 +16,7 @@ from benjamin.core.security.policy import PermissionsPolicy
 from benjamin.core.security.audit import log_policy_event
 from benjamin.core.security.scopes import default_scopes_for_skill
 from benjamin.core.skills.registry import SkillRegistry
+from benjamin.core.infra.breaker_manager import ServiceDegradedError
 
 from .schemas import (
     PlannedActionNotify,
@@ -239,10 +240,17 @@ class RuleEngine:
         )
 
     def compute_matches(self, rule: Rule, include_seen: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-        trigger_items = self._load_trigger_items(rule)
+        notes: list[str] = []
+        try:
+            trigger_items = self._load_trigger_items(rule)
+        except ServiceDegradedError as exc:
+            service = exc.service
+            notes.append(f"service_degraded:{service}")
+            return [], [], [], notes
+
         candidate_items = trigger_items if include_seen else self._filter_new_items(rule, trigger_items)
         matching_items = self._matching_items(rule, candidate_items)
-        notes = [f"trigger_count={len(trigger_items)}", f"candidate_count={len(candidate_items)}"]
+        notes.extend([f"trigger_count={len(trigger_items)}", f"candidate_count={len(candidate_items)}"])
         if include_seen:
             notes.append("include_seen=true")
         return trigger_items, candidate_items, matching_items, notes

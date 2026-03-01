@@ -77,11 +77,13 @@ benjamin-worker
 - `BENJAMIN_AUTH_MODE`: API/UI auth mode (`off`/`token`, default `token`).
 - `BENJAMIN_AUTH_TOKEN`: required shared token when `BENJAMIN_AUTH_MODE=token`.
 - `BENJAMIN_EXPOSE_PUBLIC`: when `on`, `/chat` POST also requires auth token (default `off`).
-- `BENJAMIN_HTTP_TIMEOUT_S`: default total HTTP timeout in seconds for shared HTTP client calls (default `15.0`).
-- `BENJAMIN_HTTP_CONNECT_TIMEOUT_S`: default HTTP connect timeout in seconds (default `5.0`).
-- `BENJAMIN_HTTP_RETRIES`: default shared HTTP retry count for transient failures (default `2`).
-- `BENJAMIN_HTTP_BACKOFF_BASE_S`: base exponential backoff in seconds for retries (default `0.25`).
-- `BENJAMIN_HTTP_BACKOFF_MAX_S`: max retry backoff in seconds (default `2.0`).
+- `BENJAMIN_HTTP_TIMEOUT_S`: default total HTTP timeout in seconds for resilient HTTP calls (default `10`).
+- `BENJAMIN_HTTP_RETRIES`: shared HTTP retry count for timeout/connection/429/5xx (default `2`).
+- `BENJAMIN_HTTP_BACKOFF_BASE_MS`: base exponential backoff in milliseconds (default `250`).
+- `BENJAMIN_BREAKERS_ENABLED`: circuit breaker switch (`on`/`off`, default `on`).
+- `BENJAMIN_BREAKER_FAILURE_THRESHOLD`: consecutive failures before opening breaker (default `3`).
+- `BENJAMIN_BREAKER_OPEN_SECONDS`: open-state cooldown before half-open trial (default `60`).
+- `BENJAMIN_BREAKER_HALFOPEN_MAX_TRIALS`: trial requests allowed while half-open (default `1`).
 - `BENJAMIN_HTTP_USER_AGENT`: shared HTTP `User-Agent` header value (default `BENJAMIN/1.0`).
 - `BENJAMIN_PING_CACHE_TTL_S`: TTL in seconds for cached `/healthz/full` LLM reachability pings (default `10`).
 - `BENJAMIN_LOG_LEVEL`: structured app log level (`DEBUG`/`INFO`/`WARNING`/`ERROR`, default `INFO`).
@@ -91,6 +93,8 @@ benjamin-worker
 - `BENJAMIN_LOG_BACKUP_COUNT`: rotating log backup count (default `5`).
 
 Logs are emitted as JSONL to stdout and (by default) to `<BENJAMIN_STATE_DIR>/logs/benjamin.log` with rotation.
+
+Circuit breakers are maintained per service (`llm`, `gmail`, `calendar`) and persisted in `<BENJAMIN_STATE_DIR>/breakers.json`. Delete that file to reset breaker state manually.
 
 When auth mode is `token`, pass the token using either:
 - HTTP header: `X-BENJAMIN-TOKEN: <token>`
@@ -240,7 +244,7 @@ curl "http://localhost:8000/approvals"
 
 ## Integrations status
 
-`/healthz/full` performs a short-timeout OpenAI-compatible reachability check (`.../v1/models`) through the shared HTTP client and caches ping results for `BENJAMIN_PING_CACHE_TTL_S` seconds.
+`/healthz/full` performs a short-timeout OpenAI-compatible reachability check (`.../v1/models`) through the shared HTTP client and caches ping results for `BENJAMIN_PING_CACHE_TTL_S` seconds. Both `/healthz/full` and `/integrations/status` include breaker snapshots so degraded services are visible in API and UI.
 
 ```bash
 curl "http://localhost:8000/integrations/status"

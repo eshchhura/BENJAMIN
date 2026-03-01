@@ -5,6 +5,7 @@ import os
 
 from pydantic import BaseModel, Field
 
+from benjamin.core.infra.breaker_manager import ServiceDegradedError
 from benjamin.core.integrations.base import CalendarConnector
 from benjamin.core.skills.base import SkillResult
 
@@ -34,16 +35,19 @@ class CalendarCreateEventSkill:
 
         timezone = payload.timezone or os.getenv("BENJAMIN_TIMEZONE", "America/New_York")
         calendar_id = payload.calendar_id or os.getenv("BENJAMIN_CALENDAR_ID", "primary")
-        created = self.connector.create_event(
-            calendar_id=calendar_id,
-            title=payload.title,
-            start_iso=payload.start_iso,
-            end_iso=payload.end_iso,
-            timezone=timezone,
-            location=payload.location,
-            description=payload.description,
-            attendees=payload.attendees,
-        )
+        try:
+            created = self.connector.create_event(
+                calendar_id=calendar_id,
+                title=payload.title,
+                start_iso=payload.start_iso,
+                end_iso=payload.end_iso,
+                timezone=timezone,
+                location=payload.location,
+                description=payload.description,
+                attendees=payload.attendees,
+            )
+        except ServiceDegradedError:
+            return SkillResult(content=json.dumps({"reason": "service_degraded:calendar"}))
         return SkillResult(
             content=json.dumps(
                 {

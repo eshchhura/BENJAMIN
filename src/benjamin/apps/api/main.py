@@ -16,6 +16,7 @@ from benjamin.core.runs.store import TaskStore
 
 from .deps import (
     get_approval_service,
+    get_breaker_manager,
     get_calendar_connector,
     get_email_connector,
     get_memory_manager,
@@ -178,6 +179,7 @@ def startup() -> None:
     app.state.approval_service = get_approval_service()
     app.state.calendar_connector = get_calendar_connector()
     app.state.email_connector = get_email_connector()
+    app.state.breaker_manager = get_breaker_manager()
     app.state.rule_store = RuleStore(state_dir=app.state.memory_manager.state_dir)
     app.state.task_store = TaskStore(
         state_dir=app.state.memory_manager.state_dir,
@@ -268,6 +270,7 @@ def healthz_full() -> dict[str, object]:
     }
 
     state_writable = _state_dir_writable(state_dir)
+    breaker_snapshot = get_breaker_manager().snapshot()
     payload: dict[str, object] = {
         "ok": True,
         "python": {"version": sys.version.split()[0]},
@@ -285,6 +288,7 @@ def healthz_full() -> dict[str, object]:
             "calendar_ready": calendar_ready,
             "gmail_ready": gmail_ready,
         },
+        "breakers": breaker_snapshot,
         "scheduler": {
             "rules_enabled": _is_on("BENJAMIN_RULES_ENABLED", "off"),
             "daily_briefing_enabled": any(job.id == "daily-briefing" for job in app.state.scheduler_service.list_jobs()),

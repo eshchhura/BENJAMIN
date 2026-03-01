@@ -10,6 +10,7 @@ from benjamin.core.integrations.google_auth import GoogleDependencyError, Google
 from benjamin.core.integrations.google_calendar import GoogleCalendarConnector
 from benjamin.core.integrations.google_gmail import GoogleGmailConnector
 from benjamin.core.ledger.ledger import ExecutionLedger
+from benjamin.core.infra.breaker_manager import BreakerManager
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.notifications.notifier import NotificationRouter, build_notification_router
 from benjamin.core.orchestration.orchestrator import Orchestrator
@@ -19,6 +20,11 @@ from benjamin.core.scheduler.scheduler import SchedulerService
 @lru_cache(maxsize=1)
 def get_memory_manager() -> MemoryManager:
     return MemoryManager()
+
+
+def get_breaker_manager() -> BreakerManager:
+    memory = get_memory_manager()
+    return BreakerManager(state_dir=memory.state_dir, memory_manager=memory)
 
 
 def get_execution_ledger() -> ExecutionLedger:
@@ -41,7 +47,7 @@ def get_calendar_connector() -> CalendarConnector | None:
     if not _google_enabled():
         return None
     try:
-        return GoogleCalendarConnector(token_path=_google_token_path())
+        return GoogleCalendarConnector(token_path=_google_token_path(), breaker_manager=get_breaker_manager())
     except (GoogleDependencyError, GoogleTokenError):
         return None
 
@@ -51,7 +57,7 @@ def get_email_connector() -> EmailConnector | None:
     if not _google_enabled():
         return None
     try:
-        return GoogleGmailConnector(token_path=_google_token_path())
+        return GoogleGmailConnector(token_path=_google_token_path(), breaker_manager=get_breaker_manager())
     except (GoogleDependencyError, GoogleTokenError):
         return None
 
