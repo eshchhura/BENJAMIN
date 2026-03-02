@@ -163,7 +163,26 @@ Compact retained JSONL history conservatively using configured limits:
 python scripts/doctor.py --compact
 ```
 
+### Scheduled maintenance
 
+Worker process automation:
+
+- Daily doctor validate at `BENJAMIN_DOCTOR_VALIDATE_TIME` (default `09:10`).
+- Weekly compact at `BENJAMIN_WEEKLY_COMPACT_DOW` + `BENJAMIN_WEEKLY_COMPACT_TIME` (default `sun 03:30`).
+
+On-demand operator actions:
+
+```bash
+curl http://localhost:8000/v1/ops/maintenance
+curl -X POST http://localhost:8000/v1/ops/maintenance/run-doctor-now
+curl -X POST http://localhost:8000/v1/ops/maintenance/run-compact-now
+```
+
+UI dashboard: `GET /ui/ops`
+
+Compact scope is intentionally limited to `tasks.jsonl`, `episodic.jsonl`, and `executions.jsonl`.
+
+Status is tracked in `<BENJAMIN_STATE_DIR>/maintenance.json` and echoed in `/healthz/full` without running maintenance inline.
 
 ## Safe mode operations
 

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Maintenance</h2>
+
+<section>
+  <h3>Safe Mode</h3>
+  <p>Enabled: <strong>{{ "yes" if safe_mode else "no" }}</strong></p>
+  <form method="post" action="/v1/ops/safe-mode/enable" style="display:inline-block;">
+    <button type="submit">Enable Safe Mode</button>
+  </form>
+  <form method="post" action="/v1/ops/safe-mode/disable" style="display:inline-block;">
+    <button type="submit">Disable Safe Mode</button>
+  </form>
+</section>
+
+<section>
+  <h3>Breakers</h3>
+  <ul>
+    {% for name, snapshot in breaker_snapshot.items() %}
+    <li><strong>{{ name }}</strong>: {{ snapshot.state or "unknown" }}{% if snapshot.updated_at_iso %} (updated {{ snapshot.updated_at_iso }}){% endif %}{% if snapshot.failure_count is not none %}, failures={{ snapshot.failure_count }}{% endif %}</li>
+    {% else %}
+    <li>No breaker data</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section>
+  <h3>Doctor Validate</h3>
+  <p>Last run: {{ maintenance.doctor_validate.last_run_iso or "never" }}</p>
+  <p>OK: {{ maintenance.doctor_validate.ok }}</p>
+  <pre>{{ maintenance.doctor_validate.summary }}</pre>
+  <form method="post" action="/ui/ops/run-doctor-now">
+    <button type="submit">Run Doctor Now</button>
+  </form>
+</section>
+
+<section>
+  <h3>Weekly Compact</h3>
+  <p>Last run: {{ maintenance.weekly_compact.last_run_iso or "never" }}</p>
+  <p>OK: {{ maintenance.weekly_compact.ok }}</p>
+  <pre>{{ maintenance.weekly_compact.summary }}</pre>
+  <form method="post" action="/ui/ops/run-compact-now">
+    <button type="submit">Run Compact Now</button>
+  </form>
+</section>
+
+<p><a href="/ui/doctor">Open Doctor details</a></p>
+{% endblock %}

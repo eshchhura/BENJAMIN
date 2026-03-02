@@ -32,6 +32,7 @@ from .routes_jobs import router as jobs_router
 from .routes_memory import router as memory_router
 from .routes_ops import router as ops_router
 from .routes_ops_safe import router as ops_safe_router
+from .routes_ops_maint import router as ops_maint_router
 from .routes_rules import router as rules_router
 from .routes_security import router as security_router
 from .routes_tasks import router as tasks_router
@@ -42,6 +43,7 @@ from benjamin.core.http.errors import BenjaminHTTPError
 from benjamin.core.logging import configure_logging
 from benjamin.core.logging.context import log_context
 from benjamin.core.models.llm_provider import BenjaminLLM
+from benjamin.core.ops.maintenance import load_maintenance_status
 from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 
 
@@ -133,6 +135,7 @@ app.include_router(rules_router, prefix="/rules", tags=["rules"])
 app.include_router(security_router, prefix="/v1/security", tags=["security"])
 app.include_router(ops_router, prefix="/v1/ops", tags=["ops"])
 app.include_router(ops_safe_router, prefix="/v1/ops", tags=["ops"])
+app.include_router(ops_maint_router, prefix="/v1/ops", tags=["ops"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
 
 
@@ -296,6 +299,7 @@ def healthz_full() -> dict[str, object]:
         },
         "safe_mode": {"enabled": safe_mode_enabled},
         "breakers": breaker_snapshot,
+        "maintenance": load_maintenance_status(state_dir),
         "scheduler": {
             "rules_enabled": _is_on("BENJAMIN_RULES_ENABLED", "off"),
             "daily_briefing_enabled": any(job.id == "daily-briefing" for job in app.state.scheduler_service.list_jobs()),

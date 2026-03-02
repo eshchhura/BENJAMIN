@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from benjamin.core.ledger.keys import approval_execution_key
 from benjamin.core.observability.query import build_correlation_view, search_runs
 from benjamin.core.ops.doctor import run_doctor
+from benjamin.core.ops.maintenance import load_maintenance_status, run_doctor_validate, run_weekly_compact
 from benjamin.core.orchestration.orchestrator import ChatRequest
 from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 from benjamin.core.security.overrides import PolicyOverridesStore
@@ -81,6 +82,44 @@ def ui_chat_post(request: Request, message: str = Form(...)):
     result = request.app.state.orchestrator.handle(ChatRequest(message=message))
     return templates.TemplateResponse("chat.html", _template_payload(request, result=result, message=message))
 
+
+
+
+@router.get("/ops")
+def ui_ops(request: Request):
+    maintenance = load_maintenance_status(request.app.state.memory_manager.state_dir)
+    breaker_snapshot = request.app.state.breaker_manager.snapshot()
+    return templates.TemplateResponse(
+        "ops.html",
+        _template_payload(
+            request,
+            maintenance=maintenance,
+            breaker_snapshot=breaker_snapshot,
+            safe_mode=is_safe_mode_enabled(request.app.state.memory_manager.state_dir),
+        ),
+    )
+
+
+@router.post("/ops/run-doctor-now")
+def ui_ops_run_doctor(request: Request):
+    run_doctor_validate(
+        state_dir=request.app.state.memory_manager.state_dir,
+        notifier=request.app.state.notification_router,
+        memory_manager=request.app.state.memory_manager,
+        breaker_manager=request.app.state.breaker_manager,
+        safe_mode_snapshot=is_safe_mode_enabled(request.app.state.memory_manager.state_dir),
+    )
+    return RedirectResponse(url="/ui/ops", status_code=303)
+
+
+@router.post("/ops/run-compact-now")
+def ui_ops_run_compact(request: Request):
+    run_weekly_compact(
+        state_dir=request.app.state.memory_manager.state_dir,
+        notifier=request.app.state.notification_router,
+        memory_manager=request.app.state.memory_manager,
+    )
+    return RedirectResponse(url="/ui/ops", status_code=303)
 
 @router.get("/doctor")
 def ui_doctor(request: Request):
