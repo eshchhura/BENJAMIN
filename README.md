@@ -58,6 +58,39 @@ Safety guarantees:
 - `--repair` / `--compact` always create backups like `<file>.bak.<timestamp>`.
 - Rewrites are atomic (temp file then replace).
 
+
+## Safe Mode
+
+Safe mode is an operational kill-switch for write paths. When enabled, BENJAMIN remains observable and read-only, but blocks risky actions immediately:
+
+- Write skills are denied before approvals are created (`safe_mode_denied`).
+- `POST /approvals/{id}/approve` returns `409` and does not execute stored steps.
+- Rules `notify` actions still run, but `propose_step` is blocked with `blocked_reason=safe_mode`.
+- LLM planner and drafter are forced off (even if feature env flags are on).
+
+Enable safe mode:
+
+```bash
+export BENJAMIN_SAFE_MODE=on
+```
+
+Or toggle it at runtime (when not forced by env):
+
+```bash
+curl http://localhost:8000/v1/ops/safe-mode
+curl -X POST http://localhost:8000/v1/ops/safe-mode/enable
+curl -X POST http://localhost:8000/v1/ops/safe-mode/disable
+```
+
+Runtime toggles persist to `<BENJAMIN_STATE_DIR>/safe_mode.json` and survive restarts.
+If `BENJAMIN_SAFE_MODE=on` is set, disable attempts return `409 Safe mode forced by env`.
+
+Recovery checklist:
+
+1. Disable safe mode (unset env or call API disable endpoint).
+2. Re-check scopes/allowlists in `/ui/scopes` or security API.
+3. Re-run blocked chats/approvals/rules once policy is restored.
+
 ## Run services
 
 ```bash
@@ -90,6 +123,9 @@ benjamin-worker
 - `BENJAMIN_SCOPES_ENABLED`: comma-separated scope list used as write allowlist in `default` mode or strict allowlist in `allowlist` mode.
 - `BENJAMIN_RULES_ALLOWED_SCOPES`: comma-separated scope list rules are allowed to propose (default `reminders.write`).
 - `BENJAMIN_POLICY_OVERRIDES`: when `on` (default), UI/API policy changes are stored in `<BENJAMIN_STATE_DIR>/policy_overrides.json`; when `off`, scopes are read-only from env.
+- `BENJAMIN_SAFE_MODE`: global runtime safety switch (`on`/`off`, default `off`).
+- `BENJAMIN_SAFE_MODE_ALLOW_SUMMARIZER`: when safe mode is on, keep summarizer enabled (`on`/`off`, default `on`).
+- `BENJAMIN_SAFE_MODE_ALLOW_RULE_BUILDER`: when safe mode is on, allow rules from-text builder (`on`/`off`, default `off`).
 - `BENJAMIN_AUTH_MODE`: API/UI auth mode (`off`/`token`, default `token`).
 - `BENJAMIN_AUTH_TOKEN`: required shared token when `BENJAMIN_AUTH_MODE=token`.
 - `BENJAMIN_EXPOSE_PUBLIC`: when `on`, `/chat` POST also requires auth token (default `off`).

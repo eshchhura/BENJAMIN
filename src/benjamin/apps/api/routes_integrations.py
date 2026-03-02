@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 
 from .deps import get_breaker_manager, get_calendar_connector, get_email_connector, get_memory_manager
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 
 router = APIRouter()
 
@@ -20,6 +21,7 @@ def integrations_status(
     google_enabled = os.getenv("BENJAMIN_GOOGLE_ENABLED", "off").casefold() == "on"
     token_path = Path(os.getenv("BENJAMIN_GOOGLE_TOKEN_PATH", str(memory_manager.state_dir / "google_token.json"))).expanduser()
     return {
+        "safe_mode": is_safe_mode_enabled(memory_manager.state_dir),
         "google_enabled": google_enabled,
         "google_token_present": token_path.exists(),
         "calendar_ready": calendar_connector is not None,

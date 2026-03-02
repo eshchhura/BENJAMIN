@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 import time
 from dataclasses import dataclass
 
@@ -10,6 +11,7 @@ from benjamin.core.infra.breaker_manager import BreakerManager, ServiceDegradedE
 from benjamin.core.memory.manager import MemoryManager
 from benjamin.core.net.http import HTTPRequestError
 from benjamin.core.observability.trace import Trace
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled, safe_mode_allow_rule_builder, safe_mode_allow_summarizer
 
 from .llm import LLM
 from .llm_openai_compat import OpenAICompatClient
@@ -59,7 +61,20 @@ class BenjaminLLM:
     def feature_enabled(name: str) -> bool:
         provider = os.getenv("BENJAMIN_LLM_PROVIDER", "off").casefold()
         default = "on" if provider != "off" else "off"
-        return os.getenv(name, default).casefold() == "on"
+        configured = os.getenv(name, default).casefold() == "on"
+
+        state_dir = Path(os.getenv("BENJAMIN_STATE_DIR", str(Path.home() / ".benjamin"))).expanduser()
+        safe_mode = is_safe_mode_enabled(state_dir)
+        if not safe_mode:
+            return configured
+
+        if name in {"BENJAMIN_LLM_PLANNER", "BENJAMIN_LLM_DRAFTER"}:
+            return False
+        if name == "BENJAMIN_LLM_SUMMARIZER":
+            return configured and safe_mode_allow_summarizer()
+        if name == "BENJAMIN_LLM_RULE_BUILDER":
+            return configured and safe_mode_allow_rule_builder()
+        return configured
 
     def complete_text(self, system: str, user: str, max_tokens: int | None = None, temperature: float | None = None, trace: Trace | None = None) -> str:
         used_tokens = max_tokens or self.config.max_tokens_text

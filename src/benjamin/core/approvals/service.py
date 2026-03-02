@@ -14,6 +14,7 @@ from benjamin.core.approvals.schemas import PendingApproval
 from benjamin.core.approvals.store import ApprovalStore, now_iso
 from benjamin.core.logging.context import correlation_id_var, log_context
 from benjamin.core.memory.manager import MemoryManager
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 from benjamin.core.orchestration.planner import Plan
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep, StepResult
 from benjamin.core.security.audit import log_policy_event
@@ -47,6 +48,8 @@ class ApprovalService:
     ) -> PendingApproval:
         if not step.skill_name:
             raise ValueError("approval requires a skill step")
+        if is_safe_mode_enabled(self.memory_manager.state_dir):
+            raise ValueError("safe_mode_denied")
         skill = registry.get(step.skill_name)
         if getattr(skill, "side_effect", "read") != "write":
             raise ValueError("approval can only be created for write skills")
@@ -98,6 +101,14 @@ class ApprovalService:
 
         if record.status != "pending":
             raise HTTPException(status_code=400, detail=f"approval is {record.status}")
+
+        if is_safe_mode_enabled(self.memory_manager.state_dir):
+            self.memory_manager.episodic.append(
+                kind="policy",
+                summary=f"Safe mode blocked approval execution for {record.step.skill_name}",
+                meta={"approval_id": record.id, "step_id": record.step.id, "correlation_id": correlation_id_var.get() or ""},
+            )
+            raise HTTPException(status_code=409, detail="Safe mode enabled; approval execution is disabled")
 
         now = datetime.now(timezone.utc)
         if self.is_expired(record, now):
