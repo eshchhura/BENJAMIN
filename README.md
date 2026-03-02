@@ -59,6 +59,28 @@ Safety guarantees:
 - Rewrites are atomic (temp file then replace).
 
 
+
+## Maintenance automation
+
+BENJAMIN schedules two worker maintenance jobs (when `BENJAMIN_MAINTENANCE_ENABLED=on`):
+
+- **Daily Doctor Validate** at `BENJAMIN_DOCTOR_VALIDATE_TIME` (default `09:10` local).
+- **Weekly Compact** on `BENJAMIN_WEEKLY_COMPACT_DOW` at `BENJAMIN_WEEKLY_COMPACT_TIME` (default Sunday `03:30` local).
+
+State is persisted to `<BENJAMIN_STATE_DIR>/maintenance.json` and exposed via:
+
+- `GET /v1/ops/maintenance`
+- `POST /v1/ops/maintenance/run-doctor-now`
+- `POST /v1/ops/maintenance/run-compact-now`
+- UI: `/ui/ops`
+
+Safety notes:
+
+- Doctor validate is read-only and never repairs automatically.
+- Compact only targets the safe set: `tasks.jsonl`, `episodic.jsonl`, and `executions.jsonl`.
+- Every maintenance run writes episodic memory entry `kind=maintenance` with correlation metadata.
+- Notifications fire on issues by default; set `BENJAMIN_MAINTENANCE_NOTIFY_ON_OK=on` to always notify.
+
 ## Safe Mode
 
 Safe mode is an operational kill-switch for write paths. When enabled, BENJAMIN remains observable and read-only, but blocks risky actions immediately:
@@ -108,6 +130,11 @@ benjamin-worker
 - `BENJAMIN_NOTIFIER`: enabled channels (`console`, `discord`, or comma-separated like `console,discord`; default `console`).
 - `BENJAMIN_DISCORD_WEBHOOK_URL`: Discord webhook URL (required when `discord` notifier is enabled).
 - `BENJAMIN_DAILY_BRIEFING_TIME`: default daily briefing time in local `HH:MM` format (default `09:00`).
+- `BENJAMIN_MAINTENANCE_ENABLED`: enable scheduled maintenance jobs in worker (`on`/`off`, default `on`).
+- `BENJAMIN_DOCTOR_VALIDATE_TIME`: daily doctor validation time in local `HH:MM` format (default `09:10`).
+- `BENJAMIN_WEEKLY_COMPACT_TIME`: weekly compact time in local `HH:MM` format (default `03:30`).
+- `BENJAMIN_WEEKLY_COMPACT_DOW`: weekly compact day of week (`sun` default).
+- `BENJAMIN_MAINTENANCE_NOTIFY_ON_OK`: notify on successful maintenance runs (`on`/`off`, default `off`).
 - `BENJAMIN_TIMEZONE`: IANA timezone name used by scheduler cron jobs (default `America/New_York`).
 - `BENJAMIN_GOOGLE_ENABLED`: enable Google calendar/gmail read integrations (`on`/`off`, default `off`).
 - `BENJAMIN_GOOGLE_TOKEN_PATH`: OAuth token JSON path (default `<BENJAMIN_STATE_DIR>/google_token.json`).
