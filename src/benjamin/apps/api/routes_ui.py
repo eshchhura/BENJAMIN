@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from benjamin.core.ledger.keys import approval_execution_key
 from benjamin.core.observability.query import build_correlation_view, search_runs
+from benjamin.core.ops.doctor import run_doctor
 from benjamin.core.orchestration.orchestrator import ChatRequest
 from benjamin.core.security.overrides import PolicyOverridesStore
 from benjamin.core.security.policy import PermissionsPolicy
@@ -74,6 +75,12 @@ def ui_chat(request: Request):
 def ui_chat_post(request: Request, message: str = Form(...)):
     result = request.app.state.orchestrator.handle(ChatRequest(message=message))
     return templates.TemplateResponse("chat.html", {"request": request, "result": result, "message": message})
+
+
+@router.get("/doctor")
+def ui_doctor(request: Request):
+    report = run_doctor(state_dir=request.app.state.memory_manager.state_dir)
+    return templates.TemplateResponse("doctor.html", {"request": request, "report": report})
 
 
 @router.get("/approvals")

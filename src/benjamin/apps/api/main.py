@@ -30,6 +30,7 @@ from .routes_chat import router as chat_router
 from .routes_integrations import router as integrations_router
 from .routes_jobs import router as jobs_router
 from .routes_memory import router as memory_router
+from .routes_ops import router as ops_router
 from .routes_rules import router as rules_router
 from .routes_security import router as security_router
 from .routes_tasks import router as tasks_router
@@ -128,6 +129,7 @@ app.include_router(integrations_router, prefix="/integrations", tags=["integrati
 app.include_router(approvals_router, prefix="/approvals", tags=["approvals"])
 app.include_router(rules_router, prefix="/rules", tags=["rules"])
 app.include_router(security_router, prefix="/v1/security", tags=["security"])
+app.include_router(ops_router, prefix="/v1/ops", tags=["ops"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
 
 

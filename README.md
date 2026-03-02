@@ -42,6 +42,22 @@ Preferred test command:
 python scripts/test.py
 ```
 
+
+## Ops Doctor
+
+Validate persisted BENJAMIN state (JSON/JSONL), detect corruption, and optionally repair/compact files:
+
+```bash
+python scripts/doctor.py
+python scripts/doctor.py --repair
+python scripts/doctor.py --compact
+```
+
+Safety guarantees:
+- Read-only by default.
+- `--repair` / `--compact` always create backups like `<file>.bak.<timestamp>`.
+- Rewrites are atomic (temp file then replace).
+
 ## Run services
 
 ```bash
