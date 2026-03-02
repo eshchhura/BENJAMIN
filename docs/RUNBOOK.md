@@ -163,3 +163,22 @@ Compact retained JSONL history conservatively using configured limits:
 python scripts/doctor.py --compact
 ```
 
+
+
+## Safe mode operations
+
+Enable safe mode immediately:
+
+```bash
+export BENJAMIN_SAFE_MODE=on
+```
+
+Or toggle with Ops API (token required when auth enabled):
+
+```bash
+curl http://localhost:8000/v1/ops/safe-mode
+curl -X POST http://localhost:8000/v1/ops/safe-mode/enable
+curl -X POST http://localhost:8000/v1/ops/safe-mode/disable
+```
+
+Safe mode blocks write skills, approval execution, and rule `propose_step` while keeping read APIs, UI observability, and rule notifications active. Planner/drafter LLM features are also forced off while safe mode is enabled.

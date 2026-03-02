@@ -31,6 +31,7 @@ from .routes_integrations import router as integrations_router
 from .routes_jobs import router as jobs_router
 from .routes_memory import router as memory_router
 from .routes_ops import router as ops_router
+from .routes_ops_safe import router as ops_safe_router
 from .routes_rules import router as rules_router
 from .routes_security import router as security_router
 from .routes_tasks import router as tasks_router
@@ -41,6 +42,7 @@ from benjamin.core.http.errors import BenjaminHTTPError
 from benjamin.core.logging import configure_logging
 from benjamin.core.logging.context import log_context
 from benjamin.core.models.llm_provider import BenjaminLLM
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 
 
 def _is_on(name: str, default: str = "off") -> bool:
@@ -130,6 +132,7 @@ app.include_router(approvals_router, prefix="/approvals", tags=["approvals"])
 app.include_router(rules_router, prefix="/rules", tags=["rules"])
 app.include_router(security_router, prefix="/v1/security", tags=["security"])
 app.include_router(ops_router, prefix="/v1/ops", tags=["ops"])
+app.include_router(ops_safe_router, prefix="/v1/ops", tags=["ops"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
 
 
@@ -160,7 +163,7 @@ async def auth_middleware(request, call_next):
             return await call_next(request)
         return RedirectResponse(url="/ui/login", status_code=302)
 
-    protected_prefixes = ("/approvals", "/jobs", "/rules", "/memory", "/v1/security")
+    protected_prefixes = ("/approvals", "/jobs", "/rules", "/memory", "/v1/security", "/v1/ops")
     if method in {"POST", "PUT", "PATCH", "DELETE"} and path.startswith(protected_prefixes):
         if not is_request_authenticated(request):
             return JSONResponse(status_code=401, content={"detail": "unauthorized"})
@@ -263,6 +266,7 @@ def healthz_full() -> dict[str, object]:
     calendar_ready = get_calendar_connector() is not None
     gmail_ready = get_email_connector() is not None
     llm_reachable = _llm_reachable(provider)
+    safe_mode_enabled = is_safe_mode_enabled(state_dir)
     llm_features = {
         "planner": BenjaminLLM.feature_enabled("BENJAMIN_LLM_PLANNER"),
         "summarizer": BenjaminLLM.feature_enabled("BENJAMIN_LLM_SUMMARIZER"),
@@ -290,6 +294,7 @@ def healthz_full() -> dict[str, object]:
             "calendar_ready": calendar_ready,
             "gmail_ready": gmail_ready,
         },
+        "safe_mode": {"enabled": safe_mode_enabled},
         "breakers": breaker_snapshot,
         "scheduler": {
             "rules_enabled": _is_on("BENJAMIN_RULES_ENABLED", "off"),

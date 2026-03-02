@@ -17,6 +17,7 @@ from benjamin.core.security.audit import log_policy_event
 from benjamin.core.security.scopes import default_scopes_for_skill
 from benjamin.core.skills.registry import SkillRegistry
 from benjamin.core.infra.breaker_manager import ServiceDegradedError
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 
 from .schemas import (
     PlannedActionNotify,
@@ -96,6 +97,10 @@ class RuleEngine:
                         notes.append("notify_sent")
                         executed_actions += 1
                     elif isinstance(action, RuleActionProposeStep):
+                        if is_safe_mode_enabled(self.memory_manager.state_dir):
+                            notes.extend(["safe_mode_blocked", "propose_step_blocked:safe_mode"])
+                            continue
+
                         action_signature = {
                             "skill_name": action.skill_name,
                             "args": action.args,
@@ -287,13 +292,17 @@ class RuleEngine:
             elif isinstance(action, RuleActionProposeStep):
                 required_scopes = self._required_scopes_for_skill(action.skill_name)
                 blocked_reason = None
-                allowlist_ok, blocked_by_allowlist = self.permissions_policy.check_rules_allowlist(required_scopes)
-                if not allowlist_ok:
-                    blocked_reason = f"rule allowlist blocks: {', '.join(blocked_by_allowlist)}"
+                if is_safe_mode_enabled(self.memory_manager.state_dir):
+                    blocked_reason = "safe_mode"
+                    applied_notes.append("safe_mode_blocked")
                 else:
-                    scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(required_scopes)
-                    if not scopes_ok:
-                        blocked_reason = f"scope disabled: {', '.join(disabled_scopes)}"
+                    allowlist_ok, blocked_by_allowlist = self.permissions_policy.check_rules_allowlist(required_scopes)
+                    if not allowlist_ok:
+                        blocked_reason = f"rule allowlist blocks: {', '.join(blocked_by_allowlist)}"
+                    else:
+                        scopes_ok, disabled_scopes = self.permissions_policy.check_scopes(required_scopes)
+                        if not scopes_ok:
+                            blocked_reason = f"scope disabled: {', '.join(disabled_scopes)}"
                 planned_actions.append(
                     PlannedActionProposeStep(
                         type="propose_step",

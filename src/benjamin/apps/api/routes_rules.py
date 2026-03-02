@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from benjamin.core.rules.evaluator import run_rules_evaluation
 from benjamin.core.rules.nl_builder import RuleNLBuilder
 from benjamin.core.rules.engine import RuleEngine
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 from benjamin.core.rules.schemas import Rule, RuleActionNotify, RuleCondition, RuleCreate, RuleTestPreview, RuleTrigger
 from benjamin.core.rules.store import RuleStore
 
@@ -122,6 +123,9 @@ async def create_rule(
 
 @router.post("/from-text", response_model=RuleFromTextResponse)
 def rules_from_text(payload: RuleFromTextRequest, request: Request) -> RuleFromTextResponse:
+    if is_safe_mode_enabled(request.app.state.memory_manager.state_dir):
+        return RuleFromTextResponse(ok=False, error="Rule builder disabled in safe mode")
+
     builder = RuleNLBuilder()
     known_write_skills = {
         skill.name

@@ -145,7 +145,10 @@ class Orchestrator:
                 if result.error and result.error.startswith("approval_required:")
             ]
             policy_errors = [result for result in step_results if result.error and result.error.startswith("policy_denied:")]
-            if approval_errors:
+            safe_mode_errors = [result for result in step_results if result.error == "safe_mode_denied"]
+            if safe_mode_errors:
+                final_response = "Safe mode enabled; cannot propose write actions."
+            elif approval_errors:
                 approval_id = approval_errors[0].split(":", 1)[1]
                 final_response = (
                     f"Approval required to proceed. Approval ID: {approval_id}. "

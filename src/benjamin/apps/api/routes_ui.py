@@ -11,6 +11,7 @@ from benjamin.core.ledger.keys import approval_execution_key
 from benjamin.core.observability.query import build_correlation_view, search_runs
 from benjamin.core.ops.doctor import run_doctor
 from benjamin.core.orchestration.orchestrator import ChatRequest
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 from benjamin.core.security.overrides import PolicyOverridesStore
 from benjamin.core.security.policy import PermissionsPolicy
 from benjamin.core.security.scopes import ALL_SCOPES
@@ -34,6 +35,10 @@ def _policy_snapshot_diff(before: dict, after: dict) -> dict[str, list[str] | bo
     }
 
 
+def _template_payload(request: Request, **extra):
+    return {"request": request, "safe_mode_enabled": is_safe_mode_enabled(request.app.state.memory_manager.state_dir), **extra}
+
+
 @router.get("/")
 def ui_root() -> RedirectResponse:
     return RedirectResponse(url="/ui/chat", status_code=303)
@@ -41,7 +46,7 @@ def ui_root() -> RedirectResponse:
 
 @router.get("/login")
 def ui_login(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None, "auth_enabled": is_auth_enabled()})
+    return templates.TemplateResponse("login.html", _template_payload(request, error=None, auth_enabled=is_auth_enabled()))
 
 
 @router.post("/login")
@@ -49,7 +54,7 @@ def ui_login_post(request: Request, token: str = Form(default="")):
     if is_auth_enabled() and token != get_required_token():
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "Invalid token", "auth_enabled": True},
+            _template_payload(request, error="Invalid token", auth_enabled=True),
             status_code=401,
         )
 
@@ -68,19 +73,19 @@ def ui_logout() -> RedirectResponse:
 
 @router.get("/chat")
 def ui_chat(request: Request):
-    return templates.TemplateResponse("chat.html", {"request": request, "result": None})
+    return templates.TemplateResponse("chat.html", _template_payload(request, result=None))
 
 
 @router.post("/chat")
 def ui_chat_post(request: Request, message: str = Form(...)):
     result = request.app.state.orchestrator.handle(ChatRequest(message=message))
-    return templates.TemplateResponse("chat.html", {"request": request, "result": result, "message": message})
+    return templates.TemplateResponse("chat.html", _template_payload(request, result=result, message=message))
 
 
 @router.get("/doctor")
 def ui_doctor(request: Request):
     report = run_doctor(state_dir=request.app.state.memory_manager.state_dir)
-    return templates.TemplateResponse("doctor.html", {"request": request, "report": report})
+    return templates.TemplateResponse("doctor.html", _template_payload(request, report=report))
 
 
 @router.get("/approvals")
@@ -92,7 +97,7 @@ def ui_approvals(request: Request):
     return templates.TemplateResponse(
         "approvals.html",
         {
-            "request": request,
+            **_template_payload(request),
             "approvals": approvals,
             "is_scope_enabled": {scope: policy.is_scope_enabled(scope) for approval in approvals for scope in approval.required_scopes},
         },
@@ -121,7 +126,7 @@ def ui_reject(request: Request, approval_id: str, reason: str = Form(default="")
 @router.get("/jobs")
 def ui_jobs(request: Request):
     jobs = request.app.state.scheduler_service.list_jobs()
-    return templates.TemplateResponse("jobs.html", {"request": request, "jobs": jobs})
+    return templates.TemplateResponse("jobs.html", _template_payload(request, jobs=jobs))
 
 
 @router.post("/jobs/reminder")
@@ -149,7 +154,7 @@ def ui_jobs_briefing(request: Request, time_hhmm: str = Form(...)):
 def ui_rules(request: Request):
     rules = request.app.state.rule_store.list_all()
     last_results = getattr(request.app.state, "last_rule_results", [])
-    return templates.TemplateResponse("rules.html", {"request": request, "rules": rules, "results": last_results})
+    return templates.TemplateResponse("rules.html", _template_payload(request, rules=rules, results=last_results))
 
 
 @router.post("/rules/create")
@@ -232,7 +237,7 @@ def ui_rules_eval(request: Request):
 def ui_memory(request: Request):
     semantic = request.app.state.memory_manager.semantic.list_all()
     episodic = request.app.state.memory_manager.episodic.list_recent(limit=50)
-    return templates.TemplateResponse("memory.html", {"request": request, "semantic": semantic, "episodic": episodic})
+    return templates.TemplateResponse("memory.html", _template_payload(request, semantic=semantic, episodic=episodic))
 
 
 @router.post("/memory/semantic")
@@ -249,11 +254,12 @@ def ui_scopes(request: Request):
     return templates.TemplateResponse(
         "scopes.html",
         {
-            "request": request,
+            **_template_payload(request),
             "all_scopes": ALL_SCOPES,
             "snapshot": snapshot,
             "enabled_set": set(snapshot.scopes_enabled),
             "rules_set": set(snapshot.rules_allowed_scopes),
+            "scopes_read_only": (not snapshot.overrides_enabled) or is_safe_mode_enabled(request.app.state.memory_manager.state_dir),
         },
     )
 
@@ -264,6 +270,8 @@ def ui_scopes_save(request: Request, scopes_enabled: list[str] = Form(default_fa
     policy = PermissionsPolicy(overrides_store=store)
     if not policy.overrides_enabled:
         raise HTTPException(status_code=409, detail="policy overrides are disabled (env controlled)")
+    if is_safe_mode_enabled(request.app.state.memory_manager.state_dir):
+        raise HTTPException(status_code=409, detail="Safe mode enabled; scope changes disabled")
 
     validated_enabled = sorted({scope for scope in scopes_enabled if scope in ALL_SCOPES})
     validated_rules = sorted({scope for scope in rules_allowed_scopes if scope in ALL_SCOPES})
@@ -297,7 +305,7 @@ def ui_runs(
     return templates.TemplateResponse(
         "runs.html",
         {
-            "request": request,
+            **_template_payload(request),
             **sections,
             "kind": normalized_kind,
             "status": normalized_status,
@@ -316,7 +324,7 @@ def ui_correlation_view(request: Request, correlation_id: str):
         ledger=request.app.state.approval_service.ledger,
         approval_store=request.app.state.approval_service.store,
     )
-    return templates.TemplateResponse("correlation.html", {"request": request, **payload})
+    return templates.TemplateResponse("correlation.html", _template_payload(request, **payload))
 
 
 @router.get("/runs/chat/{task_id}")

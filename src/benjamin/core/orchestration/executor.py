@@ -4,6 +4,7 @@ import json
 
 from benjamin.core.orchestration.policies import PolicyEngine
 from benjamin.core.orchestration.schemas import ContextPack, PlanStep, StepResult
+from benjamin.core.ops.safe_mode import is_safe_mode_enabled
 from benjamin.core.security.audit import log_policy_event
 
 
@@ -74,6 +75,18 @@ class Executor:
             )
 
             requires_approval = self.policy_engine.requires_approval(skill, step_requires_approval=step.requires_approval)
+            if getattr(skill, "side_effect", "read") == "write" and is_safe_mode_enabled(approval_service.memory_manager.state_dir):
+                if trace is not None:
+                    trace.emit(
+                        "SafeModeDenied",
+                        {
+                            "step_id": step.id,
+                            "skill_name": step.skill_name,
+                            "required_scopes": required_scopes,
+                        },
+                    )
+                return StepResult(step_id=step.id, ok=False, error="safe_mode_denied")
+
             if requires_approval and not force_execute_writes:
                 payload = self._approval_payload(step)
                 approval = approval_service.create_pending(

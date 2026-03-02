@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Rules</h2>
+{% if safe_mode_enabled %}<p><strong>Safe mode:</strong> propose_step actions are blocked (notify still runs).</p>{% endif %}
 <form method="post" action="/ui/rules/evaluate-now">
   <button type="submit">Evaluate now</button>
 </form>
