@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Ops Doctor</h2>
+<p>State dir: <code>{{ report.state_dir }}</code></p>
+<p>Generated: {{ report.ts_iso }}</p>
+<p><strong>Status:</strong> {% if report.ok %}OK{% else %}Attention needed{% endif %}</p>
+<table>
+  <thead>
+    <tr>
+      <th>File</th><th>Exists</th><th>Format</th><th>Size</th><th>Records</th><th>Valid</th><th>Invalid</th><th>Last TS</th><th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for file in report.files %}
+    <tr>
+      <td>{{ file.name }}</td>
+      <td>{{ "yes" if file.exists else "no" }}</td>
+      <td>{{ file.format }}</td>
+      <td>{{ file.size_bytes }}</td>
+      <td>{{ file.record_count if file.record_count is not none else "-" }}</td>
+      <td>{{ file.valid_count if file.valid_count is not none else "-" }}</td>
+      <td>{{ file.invalid_count if file.invalid_count is not none else "-" }}</td>
+      <td>{{ file.last_ts_iso or "-" }}</td>
+      <td>
+        {% if file.notes %}
+          <ul>
+            {% for note in file.notes %}<li>{{ note }}</li>{% endfor %}
+          </ul>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>Summary: files={{ report.summary.total_files }}, missing={{ report.summary.missing }}, invalid={{ report.summary.invalid_lines }}, bytes={{ report.summary.total_bytes }}</p>
+{% endblock %}

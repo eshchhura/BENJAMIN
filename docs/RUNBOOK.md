@@ -141,3 +141,25 @@ Otherwise disable integrations with `BENJAMIN_GOOGLE_ENABLED=off`.
 - Verify `BENJAMIN_AUTH_MODE` is what you expect.
 - For token mode, provide `X-BENJAMIN-TOKEN` or use `/ui/login`.
 - For local development, temporarily set `BENJAMIN_AUTH_MODE=off`.
+
+
+## State integrity checks (Ops Doctor)
+
+Run checks against persisted state files:
+
+```bash
+python scripts/doctor.py
+```
+
+Repair JSONL corruption safely (creates backups, atomic replace):
+
+```bash
+python scripts/doctor.py --repair
+```
+
+Compact retained JSONL history conservatively using configured limits:
+
+```bash
+python scripts/doctor.py --compact
+```
+
